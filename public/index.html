@@ -272,7 +272,7 @@
   .auth-overlay.hidden { display: none; }
   .auth-card {
     background: white; border-radius: 20px;
-    width: 92%; max-width: 420px;
+    width: 92%; max-width: 440px;
     padding: 36px 32px 28px;
     box-shadow: 0 25px 70px rgba(0,0,0,0.3);
   }
@@ -283,14 +283,64 @@
   }
   .auth-sub { text-align: center; color: #6b7280; font-size: 13px; margin-bottom: 24px; }
   .auth-tabs {
-    display: grid; grid-template-columns: 1fr 1fr;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
     background: #f3f4f6; border-radius: 10px; padding: 4px; margin-bottom: 20px;
   }
   .auth-tab {
-    padding: 8px; border-radius: 7px; font-size: 13px; font-weight: 600;
+    padding: 8px 4px; border-radius: 7px; font-size: 12px; font-weight: 600;
     color: #6b7280; text-align: center; cursor: pointer; transition: all 0.2s;
   }
   .auth-tab.active { background: white; color: #667eea; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .auth-subtabs {
+    display: flex; gap: 6px; background: #eef2ff; padding: 3px;
+    border-radius: 8px; margin-bottom: 14px;
+  }
+  .auth-subtab {
+    flex: 1; padding: 6px; text-align: center; font-size: 12px; font-weight: 600;
+    color: #4f46e5; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+  }
+  .auth-subtab.active { background: white; color: #4338ca; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .invite-code-input {
+    font-family: 'Courier New', monospace; letter-spacing: 3px;
+    font-size: 20px !important; font-weight: 800; text-align: center;
+    color: #4338ca; text-transform: uppercase;
+  }
+  .invite-hint {
+    font-size: 11px; color: #6b7280; margin-top: -10px; margin-bottom: 14px;
+    line-height: 1.6; background: #f5f3ff; padding: 8px 10px; border-radius: 6px;
+  }
+  .auth-hint a { color: #667eea; text-decoration: none; }
+
+  /* ================ 邀请码 + 角色展示条 ================ */
+  .invite-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 12px 16px; background: linear-gradient(135deg,#eef2ff,#faf5ff);
+    border: 1px solid #c7d2fe; border-radius: 10px; margin-bottom: 12px;
+  }
+  .invite-bar-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+  .role-badge {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .role-badge.owner   { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
+  .role-badge.manager { background: #eff6ff; color: #1e3a8a; border: 1px solid #93c5fd; }
+  .role-badge.staff   { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+  .invite-code-box {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: white; padding: 5px 10px 5px 14px; border-radius: 8px;
+    border: 1px dashed #818cf8; font-family: 'Courier New', monospace;
+    font-weight: 800; font-size: 15px; letter-spacing: 2px; color: #4338ca;
+  }
+  .invite-bar-right { display: flex; gap: 8px; flex-shrink: 0; }
+  .invite-bar .btn { padding: 7px 14px; font-size: 12px; }
+  .invite-bar-staff {
+    padding: 10px 16px; background: #f3f4f6; border-radius: 8px;
+    color: #374151; font-size: 13px; margin-bottom: 12px; display: flex;
+    align-items: center; gap: 10px;
+  }
+  .invite-bar-staff strong { color: #111827; }
+
   .auth-form .form-group label { color: #374151; }
   .auth-btn {
     width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2);
@@ -354,14 +404,30 @@
     <div class="auth-brand">🐾 宠物寄存格子管理系统</div>
     <div class="auth-sub" id="authSub">登录门店账号，数据云端同步</div>
     <div class="auth-tabs">
-      <div class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">登录</div>
-      <div class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">注册新门店</div>
+      <div class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">登 录</div>
+      <div class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">创建门店</div>
+      <div class="auth-tab" data-tab="join" onclick="switchAuthTab('join')">加入门店</div>
     </div>
     <div class="auth-error" id="authError"></div>
     <form class="auth-form" id="authForm" onsubmit="return false;">
+      <!-- 注册：门店名称 -->
       <div class="form-group" id="storeNameGroup" style="display:none;">
         <label>门店名称 *</label>
-        <input type="text" id="reg_storeName" placeholder="如：毛毛宠物纪念堂">
+        <input type="text" id="reg_storeName" placeholder="如：毛毛宠物纪念堂（店主必填）">
+      </div>
+      <!-- 注册/加入：员工姓名 -->
+      <div class="form-group" id="fullNameGroup" style="display:none;">
+        <label>您的称呼 *</label>
+        <input type="text" id="reg_fullName" placeholder="如：李店长 / 小王（用于员工管理）">
+      </div>
+      <!-- 加入门店：邀请码 -->
+      <div class="form-group" id="inviteCodeGroup" style="display:none;">
+        <label>门店邀请码 * <span style="font-weight:400;color:#9ca3af;">（问店主要）</span></label>
+        <input type="text" id="reg_inviteCode" maxlength="6" class="invite-code-input"
+               placeholder="ABC123" autocomplete="off">
+      </div>
+      <div id="joinHint" class="invite-hint" style="display:none;">
+        💡 邀请码由店主在系统右上角生成并复制。注册成功后会自动加入对应门店，共享同一份格子数据。
       </div>
       <div class="form-group">
         <label>邮箱 *</label>
@@ -415,6 +481,9 @@
       <button class="btn btn-ghost" id="logoutBtn" onclick="logout()">👤 退出</button>
     </div>
   </div>
+
+  <!-- 邀请码展示条（店主/员工不同样式） -->
+  <div id="inviteBar"></div>
 
   <div class="stats-bar">
     <div class="stat-item">总格子: <strong id="stat-total">120</strong></div>
@@ -713,8 +782,21 @@ async function bootstrapStore() {
     ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
   document.getElementById('grid').style.gridTemplateColumns =
     '36px repeat(' + COLS + ', 1fr)';
-  document.getElementById('storeTag').textContent = '🏪 ' + (currentStore.name || '未命名门店');
-  document.getElementById('storeTag').title = (currentStore.name || '') + '\n点击修改门店信息';
+
+  // 角色徽章（店主/店长/员工）
+  const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
+  const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
+  const roleClass = (currentStore.my_role || 'owner');
+  document.getElementById('storeTag').innerHTML =
+    '🏪 ' + (currentStore.name || '未命名门店') +
+    ' <span class="role-badge ' + roleClass + '" style="margin-left:6px;">' + roleName + '</span>';
+  document.getElementById('storeTag').title =
+    (currentStore.name || '') + ' · ' + roleName +
+    (currentStore.my_full_name ? '：' + currentStore.my_full_name : '') +
+    '\n点击修改门店信息';
+
+  // 2.5 渲染邀请码展示条（新增）
+  renderInviteBar();
 
   // 3. 拉取格子数据（RPC 一次性返回）
   setLoading('正在同步格子数据...');
@@ -735,36 +817,66 @@ function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
-  document.getElementById('storeNameGroup').style.display = tab === 'register' ? 'block' : 'none';
-  document.getElementById('authSubmitBtn').textContent = tab === 'register' ? '创建门店账号' : '登 录';
+
+  // 3 种模式的字段显示
+  document.getElementById('storeNameGroup').style.display    = tab === 'register' ? 'block' : 'none';
+  document.getElementById('fullNameGroup').style.display     = (tab === 'register' || tab === 'join') ? 'block' : 'none';
+  document.getElementById('inviteCodeGroup').style.display   = tab === 'join' ? 'block' : 'none';
+  document.getElementById('joinHint').style.display          = tab === 'join' ? 'block' : 'none';
+
+  // 按钮文本 & 标题副标题
+  const subEl = document.getElementById('authSub');
+  const btn = document.getElementById('authSubmitBtn');
+  if (tab === 'login') {
+    subEl.textContent = '登录门店账号，数据云端同步';
+    btn.textContent = '登 录';
+  } else if (tab === 'register') {
+    subEl.textContent = '我是店主，创建一家新门店';
+    btn.textContent = '创建门店账号';
+  } else {
+    subEl.textContent = '我是员工，使用邀请码加入已有门店';
+    btn.textContent = '加入门店';
+  }
   document.getElementById('authError').classList.remove('show');
 }
 
 async function submitAuth() {
-  const email = document.getElementById('auth_email').value.trim();
-  const password = document.getElementById('auth_password').value;
-  const storeName = document.getElementById('reg_storeName').value.trim();
-  const errBox = document.getElementById('authError');
-  const btn = document.getElementById('authSubmitBtn');
+  const email      = document.getElementById('auth_email').value.trim();
+  const password   = document.getElementById('auth_password').value;
+  const storeName  = document.getElementById('reg_storeName').value.trim();
+  const fullName   = document.getElementById('reg_fullName').value.trim();
+  const inviteCode = document.getElementById('reg_inviteCode').value.trim().toUpperCase();
+  const errBox     = document.getElementById('authError');
+  const btn        = document.getElementById('authSubmitBtn');
 
   errBox.classList.remove('show');
-  if (!email || !password) { errBox.textContent = '请填写邮箱和密码'; errBox.classList.add('show'); return; }
-  if (password.length < 6) { errBox.textContent = '密码至少 6 位'; errBox.classList.add('show'); return; }
+  if (!email || !password)                  { errBox.textContent = '请填写邮箱和密码'; errBox.classList.add('show'); return; }
+  if (password.length < 6)                  { errBox.textContent = '密码至少 6 位';   errBox.classList.add('show'); return; }
   if (authTab === 'register' && !storeName) { errBox.textContent = '请填写门店名称'; errBox.classList.add('show'); return; }
+  if ((authTab === 'register' || authTab === 'join') && !fullName)
+    { errBox.textContent = '请填写您的称呼'; errBox.classList.add('show'); return; }
+  if (authTab === 'join' && inviteCode.length !== 6)
+    { errBox.textContent = '邀请码为 6 位字母和数字（问店主要）'; errBox.classList.add('show'); return; }
 
   btn.disabled = true;
   const originalText = btn.textContent;
   btn.textContent = '处理中...';
 
   try {
-    if (authTab === 'register') {
+    if (authTab === 'register' || authTab === 'join') {
+      // 组装 signUp data（两种模式）
+      const signUpData = { full_name: fullName };
+      if (authTab === 'register') {
+        signUpData.store_name = storeName;
+      } else {
+        signUpData.invite_code = inviteCode;
+      }
       const { error } = await supabase.auth.signUp({
         email, password,
-        options: { data: { store_name: storeName } }
+        options: { data: signUpData }
       });
       if (error) throw error;
-      showToast('注册成功，正在自动登录...', 'success');
-      // 如果 Supabase 开启了邮箱确认，这里会是未登录状态
+      showToast(authTab === 'register' ? '门店创建成功，正在登录...' : '加入门店成功，正在登录...', 'success');
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         currentUser = data.session.user;
@@ -782,8 +894,11 @@ async function submitAuth() {
   } catch (err) {
     console.error(err);
     let msg = err.message || '操作失败';
-    if (msg.includes('Invalid login')) msg = '邮箱或密码错误';
-    if (msg.includes('already registered')) msg = '该邮箱已注册，请直接登录';
+    if (msg.includes('Invalid login'))        msg = '邮箱或密码错误';
+    if (msg.includes('already registered'))   msg = '该邮箱已注册，请直接登录';
+    if (msg.includes('邀请码') && msg.includes('不存在'))
+      msg = '❌ 邀请码不存在或已过期，请向店主索取最新的 6 位邀请码';
+    if (msg.includes('只有店主'))             msg = '当前账号不是店主身份，操作被拒绝';
     errBox.textContent = msg;
     errBox.classList.add('show');
   } finally {
@@ -1508,10 +1623,91 @@ async function handleImport(e) {
 }
 
 /* ==========================================================
+ *  邀请码展示 + 复制 + 重置
+ * ========================================================== */
+function renderInviteBar() {
+  const bar = document.getElementById('inviteBar');
+  if (!currentStore) { bar.innerHTML = ''; return; }
+
+  const role = currentStore.my_role || 'owner';
+  const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
+  const roleName = roleMap[role] || '员工';
+
+  if (role === 'owner') {
+    // 店主：显示邀请码 + 复制 + 重置
+    bar.innerHTML =
+      '<div class="invite-bar">' +
+        '<div class="invite-bar-left">' +
+          '<span class="role-badge owner">店 主</span>' +
+          '<span style="font-size:13px;color:#4338ca;font-weight:600;">📣 员工邀请码</span>' +
+          '<div class="invite-code-box" title="发给员工，他们在注册时选「加入门店」并输入此码">' +
+            (currentStore.invite_code || '——') +
+          '</div>' +
+          '<span style="font-size:12px;color:#6b7280;">将此邀请码发给员工，他们注册时选择「加入门店」并粘贴即可自动加入本店</span>' +
+        '</div>' +
+        '<div class="invite-bar-right">' +
+          '<button class="btn btn-primary"   onclick="copyInviteCode()">📋 复制邀请码</button>' +
+          '<button class="btn btn-secondary" onclick="resetInviteCode()">🔄 重置</button>' +
+        '</div>' +
+      '</div>';
+  } else {
+    // 员工：显示已加入 + 所属门店
+    bar.innerHTML =
+      '<div class="invite-bar-staff">' +
+        '<span>👥 ' + (currentStore.my_full_name || currentUser && currentUser.email) +
+        ' · 身份：<strong style="color:#4338ca;">' + roleName + '</strong>' +
+        ' · 已加入门店：<strong>' + (currentStore.name || '') + '</strong>' +
+        (currentStore.contact_phone ? ' · 门店电话：' + currentStore.contact_phone : '') +
+        '</span>' +
+      '</div>';
+  }
+}
+
+async function copyInviteCode() {
+  if (!currentStore || !currentStore.invite_code) return;
+  try {
+    await navigator.clipboard.writeText(currentStore.invite_code);
+    showToast('邀请码 ' + currentStore.invite_code + ' 已复制到剪贴板，直接发给员工即可', 'success');
+  } catch (e) {
+    // 兼容老浏览器
+    const input = document.createElement('textarea');
+    input.value = currentStore.invite_code;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    showToast('邀请码已复制：' + currentStore.invite_code, 'success');
+  }
+}
+
+async function resetInviteCode() {
+  if (!confirm('重置后旧邀请码立刻失效，已加入的员工不受影响，确定重置吗？')) return;
+  try {
+    setLoading('正在生成新邀请码...');
+    const { data, error } = await supabase.rpc('reset_store_invite_code');
+    if (error) throw error;
+    currentStore.invite_code = data;
+    renderInviteBar();
+    // 同步更新 storeTag（不需要，只更新邀请码条）
+    showToast('新邀请码已生成：' + data + '，旧邀请码已作废', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || '重置失败', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/* ==========================================================
  *  门店信息编辑
  * ========================================================== */
 function editStoreInfo() {
   if (!currentStore) return;
+  const role = currentStore.my_role || 'owner';
+  if (role === 'staff') {
+    showToast('只有店主或店长可以修改门店设置和行列数', 'error');
+    return;
+  }
   document.getElementById('s_name').value = currentStore.name || '';
   document.getElementById('s_address').value = currentStore.address || '';
   document.getElementById('s_phone').value = currentStore.contact_phone || '';
@@ -1524,6 +1720,9 @@ function closeStoreModal() {
   document.getElementById('storeModal').classList.remove('active');
 }
 async function saveStoreInfo() {
+  const role = currentStore.my_role || 'owner';
+  if (role === 'staff') { showToast('只有店主或店长可以修改门店设置', 'error'); return; }
+
   const name = document.getElementById('s_name').value.trim();
   if (!name) { showToast('请填写门店名称', 'error'); return; }
   const rows = Math.min(30, Math.max(1, parseInt(document.getElementById('s_rows').value) || 8));
@@ -1553,9 +1752,15 @@ async function saveStoreInfo() {
     ROWS = rows;
     COLS = cols;
     document.getElementById('grid').style.gridTemplateColumns = '36px repeat(' + COLS + ', 1fr)';
-    document.getElementById('storeTag').textContent = '🏪 ' + name;
+
+    // 更新角色徽章（和邀请码条）
+    const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
+    const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
+    document.getElementById('storeTag').innerHTML =
+      '🏪 ' + name + ' <span class="role-badge ' + (currentStore.my_role || 'owner') + '" style="margin-left:6px;">' + roleName + '</span>';
     document.getElementById('gridSizeHint').textContent =
       ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+    renderInviteBar();
 
     closeStoreModal();
     renderGrid();
