@@ -3,9 +3,36 @@
 -- 功能：多员工同步 + 邀请码机制
 -- 幂等：可反复执行，不会影响已有数据
 -- 适用：已经跑过 001_init_schema.sql / FIX_01_register_error_all.sql 的项目
+-- v1.1 修复：老门店批量生成邀请码时的 stores_invite_code_key 23505 唯一约束冲突
+--       （报错 "duplicate key value violates unique constraint" 先跑 FIX_02）
 -- ============================================================
 
--- ---------- 1. 给 stores 表加邀请码字段（如果没加） ----------
+-- ---------- 0. 安全辅助函数：逐行生成全局唯一的 6 位邀请码（幂等重建） ----------
+create or replace function public.gen_unique_invite_code()
+returns text as $$
+declare
+    v_chars  text := 'ABCDEFGHJKMNPQRTUVWXYZ23456789';
+    v_code   text;
+    v_loops  int  := 0;
+begin
+    loop
+        v_loops := v_loops + 1;
+        if v_loops <= 500 then
+            select string_agg(substr(v_chars, (random() * (length(v_chars)-1) + 1)::int, 1), '')
+              into v_code from generate_series(1,6);
+        else
+            select string_agg(substr(v_chars, (random() * (length(v_chars)-1) + 1)::int, 1), '')
+              into v_code from generate_series(1,7);
+        end if;
+        exit when not exists (select 1 from public.stores where invite_code = v_code);
+    end loop;
+    return v_code;
+end;
+$$ language plpgsql volatile;
+alter function public.gen_unique_invite_code() owner to postgres;
+grant execute on function public.gen_unique_invite_code() to postgres, authenticated;
+
+-- ---------- 1. 加邀请码字段（先不加唯一约束，避免 alter inline check 时碰撞报错） ----------
 do $$
 begin
     if not exists (
@@ -13,33 +40,45 @@ begin
         where table_schema='public' and table_name='stores' and column_name='invite_code'
     ) then
         alter table public.stores
-            add column invite_code   text unique,
+            add column invite_code   text,
             add column created_by_email text;
     end if;
 end $$;
 
--- 给已有的老门店（owner 已注册但没邀请码）的生成随机邀请码
-update public.stores
-   set invite_code = (
-       select string_agg(
-           case (random()*35)::int
-               when 0 then 'A' when 1 then 'B' when 2 then 'C' when 3 then 'D' when 4 then 'E'
-               when 5 then 'F' when 6 then 'G' when 7 then 'H' when 8 then 'J' when 9 then 'K'
-               when 10 then 'M' when 11 then 'N' when 12 then 'P' when 13 then 'Q' when 14 then 'R'
-               when 15 then 'T' when 16 then 'U' when 17 then 'V' when 18 then 'W' when 19 then 'X'
-               when 20 then 'Y' when 21 then 'Z' when 22 then '2' when 23 then '3' when 24 then '4'
-               when 25 then '5' when 26 then '6' when 27 then '7' when 28 then '8' when 29 then '9'
-               when 30 then 'A' when 31 then 'B' when 32 then 'C' when 33 then 'D' when 34 then 'E'
-               when 35 then 'F'
-           end, ''
-       )
-       from generate_series(1,6)
-   ),
-       created_by_email = coalesce(created_by_email, (select email from auth.users u where u.id = stores.owner_id))
- where invite_code is null;
+-- 2. 逐行给老门店生成唯一邀请码（循环逐行调用 gen_unique_invite_code()，绝对不重复）
+do $$
+declare r record;
+begin
+    for r in select id, owner_id from public.stores where invite_code is null for update skip locked loop
+        update public.stores
+           set invite_code      = public.gen_unique_invite_code(),
+               created_by_email = coalesce(created_by_email, (select u.email from auth.users u where u.id = r.owner_id))
+         where id = r.id;
+    end loop;
+end $$;
 
--- 加非空约束（上面已经填完了）
+-- 3. 兜底：去重（理论上上面已经唯一，这里防止重复数据，保留最早创建的，其余重生成）
+with dup as (
+    select id, row_number() over (partition by invite_code order by created_at asc, id asc) as rn
+      from public.stores where invite_code is not null
+)
+update public.stores s
+   set invite_code = public.gen_unique_invite_code()
+ from dup d
+ where s.id = d.id and d.rn > 1;
+
+-- 4. 最后安全加回 not null + 唯一约束
 alter table public.stores alter column invite_code set not null;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+         where conname = 'stores_invite_code_key' and conrelid = 'public.stores'::regclass
+    ) then
+        alter table public.stores add constraint stores_invite_code_key unique (invite_code);
+    end if;
+end $$;
 
 -- ---------- 2. 新建员工关联表 store_staff ----------
 create table if not exists public.store_staff (
