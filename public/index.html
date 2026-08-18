@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐾 宠物寄存格子管理系统</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    position: relative;
+    z-index: 50;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .store-tag {
+    background: rgba(255,255,255,0.22);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 10px;
+  }
+  .header-actions { display: flex; gap: 10px; align-items: center; position: relative; flex-wrap: wrap; }
+
+  .search-wrap { position: relative; }
+  .header input[type="text"] {
+    padding: 6px 12px; border: none; border-radius: 8px; font-size: 13px;
+    width: 220px; outline: none;
+  }
+  .search-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    background: white; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    max-height: 320px; overflow-y: auto; display: none; z-index: 100;
+    border: 1px solid #e5e7eb;
+  }
+  .search-dropdown.active { display: block; }
+  .search-item {
+    padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+    display: flex; align-items: center; gap: 10px; transition: background 0.15s;
+  }
+  .search-item:last-child { border-bottom: none; }
+  .search-item:hover { background: #f0f9ff; }
+  .search-item-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .search-item-info { flex: 1; min-width: 0; }
+  .search-item-title { font-size: 13px; font-weight: 600; color: #1f2937; }
+  .search-item-sub { font-size: 11px; color: #6b7280; margin-top: 1px; }
+  .search-item-pos {
+    font-size: 11px; font-weight: 700; color: #667eea;
+    background: #eef2ff; padding: 2px 8px; border-radius: 6px; flex-shrink: 0;
+  }
+  .search-empty {
+    padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;
+  }
+
+  .header select { padding: 6px 10px; border: none; border-radius: 8px; font-size: 13px; outline: none; cursor: pointer; }
+  .btn {
+    padding: 6px 14px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;
+    font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-primary { background: white; color: #667eea; }
+  .btn-primary:hover { background: #f3f4f6; }
+  .btn-danger { background: #ef4444; color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-success { background: #22c55e; color: white; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-secondary { background: #6b7280; color: white; }
+  .btn-secondary:hover { background: #4b5563; }
+  .btn-ghost { background: rgba(255,255,255,0.2); color: white; }
+  .btn-ghost:hover { background: rgba(255,255,255,0.32); }
+
+  .zoom-controls {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 8px;
+  }
+  .zoom-controls span { font-size: 12px; min-width: 40px; text-align: center; font-weight: 600; }
+  .zoom-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    background: rgba(255,255,255,0.25); color: white; font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .zoom-btn:hover { background: rgba(255,255,255,0.4); }
+  .zoom-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .stats-bar {
+    display: flex; gap: 20px; padding: 10px 20px; background: white;
+    border-bottom: 1px solid #e5e7eb; flex-shrink: 0; font-size: 13px;
+    align-items: center; flex-wrap: wrap;
+  }
+  .stat-item { display: flex; align-items: center; gap: 6px; }
+  .stat-item strong { font-size: 16px; }
+  .legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: #6b7280; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 4px; border: 2px solid transparent; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .grid-area {
+    flex: 1; overflow: auto; padding: 16px; background: #f9fafb; cursor: grab;
+  }
+  .grid-area:active { cursor: grabbing; }
+  .grid-wrapper {
+    display: grid;
+    grid-template-columns: 36px repeat(15, 1fr);
+    gap: 4px;
+    min-width: 600px;
+    transform-origin: 0 0;
+    transition: transform 0.15s ease;
+  }
+  .col-header {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #9ca3af; font-weight: 700; padding-bottom: 4px;
+  }
+  .row-label {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #9ca3af; font-weight: 700;
+  }
+  .cell {
+    border-radius: 6px; cursor: pointer; transition: all 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; position: relative; border: 2px solid transparent; user-select: none;
+  }
+  .cell:hover { transform: scale(1.08); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .cell.small { aspect-ratio: 1; }
+  .cell.large { aspect-ratio: 2 / 1; }
+  .cell.empty { background: #e5e7eb; border: 2px dashed #d1d5db; color: #9ca3af; }
+  .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; font-weight: 600; }
+  .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; font-weight: 700; animation: pulse 2s infinite; }
+  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; font-weight: 700; animation: pulse 1.2s infinite; }
+  .cell.selected { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
+  .cell.filtered-out { opacity: 0.15; pointer-events: none; }
+  .cell.saving::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,255,255,0.6); border-radius: 4px;
+    animation: saving 1s infinite;
+  }
+  @keyframes saving { 0%,100% { opacity:0.3 } 50% { opacity:0.8 } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
+  .cell-badge {
+    position: absolute; top: -4px; right: -4px; width: 14px; height: 14px;
+    border-radius: 50%; background: #ef4444; color: white; font-size: 9px;
+    display: flex; align-items: center; justify-content: center; font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .detail-panel {
+    width: 380px; background: white; border-left: 1px solid #e5e7eb;
+    display: flex; flex-direction: column; overflow: auto; flex-shrink: 0;
+  }
+  .detail-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: #9ca3af; text-align: center; gap: 10px; padding: 40px;
+  }
+  .detail-empty .icon { font-size: 56px; opacity: 0.4; }
+  .detail-empty h3 { font-size: 16px; font-weight: 600; }
+  .detail-empty p { font-size: 13px; }
+
+  .detail-content { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .detail-header { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid #f3f4f6; }
+  .detail-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0;
+  }
+  .detail-title-block { flex: 1; min-width: 0; }
+  .detail-title { font-size: 17px; font-weight: 700; color: #1f2937; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .detail-sub { font-size: 13px; color: #6b7280; margin-top: 2px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-empty { background: #e5e7eb; color: #6b7280; }
+  .badge-occupied { background: #dcfce7; color: #166534; }
+  .badge-warning { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+
+  .detail-section { background: #f9fafb; border-radius: 10px; padding: 14px; }
+  .detail-section-title { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f3f4f6; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row label { color: #6b7280; flex-shrink: 0; }
+  .detail-row span { color: #1f2937; font-weight: 500; text-align: right; word-break: break-all; }
+
+  .memorial-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 6px; line-height: 1.5; }
+  .memorial-item:last-child { margin-bottom: 0; }
+  .memorial-item.safe { background: #ecfdf5; color: #065f46; }
+  .memorial-item.warn { background: #fffbeb; color: #92400e; }
+  .memorial-item.urgent { background: #fef2f2; color: #991b1b; }
+  .memorial-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .memorial-info { flex: 1; }
+  .memorial-info strong { font-weight: 600; }
+  .memorial-info small { display: block; font-size: 11px; opacity: 0.8; margin-top: 2px; }
+  .notes-text { font-size: 13px; color: #374151; line-height: 1.7; white-space: pre-wrap; }
+  .detail-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .detail-actions .btn { flex: 1; justify-content: center; padding: 10px; font-size: 14px; }
+  .detail-actions .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+  .modal {
+    background: white; border-radius: 16px; width: 520px; max-height: 90vh; overflow: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); transform: translateY(20px); transition: transform 0.2s;
+  }
+  .modal-overlay.active .modal { transform: translateY(0); }
+  .modal-header { padding: 20px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h2 { font-size: 18px; font-weight: 700; }
+  .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: #f3f4f6; cursor: pointer; font-size: 18px; color: #6b7280; display: flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: #e5e7eb; }
+  .modal-body { padding: 20px 24px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+  .form-group input, .form-group textarea, .form-group select {
+    width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+  .form-group input:disabled { background: #f9fafb; color: #9ca3af; cursor: not-allowed; }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  .memorial-list { display: flex; flex-direction: column; gap: 8px; }
+  .memorial-form { display: flex; gap: 8px; align-items: center; background: #f9fafb; padding: 10px; border-radius: 8px; flex-wrap: wrap; }
+  .memorial-form input, .memorial-form select { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; }
+  .memorial-form input[type="date"] { width: 130px; }
+  .memorial-form select { width: 100px; }
+  .memorial-form input[type="text"] { flex: 1; min-width: 80px; }
+  .memorial-form .btn { padding: 8px 12px; font-size: 12px; flex-shrink: 0; }
+  .memorial-chip { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #e0e7ff; border-radius: 8px; font-size: 13px; }
+  .memorial-chip .remove { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px; padding: 0 4px; }
+
+  .modal-footer { padding: 0 24px 20px; display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-footer .btn { padding: 10px 20px; }
+  .modal-footer .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(100px); background: #1f2937; color: white;
+    padding: 12px 24px; border-radius: 10px; font-size: 14px; z-index: 2000;
+    opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.success { background: #16a34a; }
+  .toast.error { background: #dc2626; }
+
+  /* ================ 登录 / 注册 遮罩层 ================ */
+  .auth-overlay {
+    position: fixed; inset: 0; z-index: 3000;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .auth-overlay.hidden { display: none; }
+  .auth-card {
+    background: white; border-radius: 20px;
+    width: 92%; max-width: 420px;
+    padding: 36px 32px 28px;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.3);
+  }
+  .auth-brand {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-bottom: 8px; font-size: 22px; font-weight: 800;
+    color: #667eea;
+  }
+  .auth-sub { text-align: center; color: #6b7280; font-size: 13px; margin-bottom: 24px; }
+  .auth-tabs {
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: #f3f4f6; border-radius: 10px; padding: 4px; margin-bottom: 20px;
+  }
+  .auth-tab {
+    padding: 8px; border-radius: 7px; font-size: 13px; font-weight: 600;
+    color: #6b7280; text-align: center; cursor: pointer; transition: all 0.2s;
+  }
+  .auth-tab.active { background: white; color: #667eea; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .auth-form .form-group label { color: #374151; }
+  .auth-btn {
+    width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white; font-weight: 700; border: none; border-radius: 10px;
+    cursor: pointer; font-size: 15px; transition: transform 0.15s;
+  }
+  .auth-btn:hover { transform: translateY(-1px); }
+  .auth-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .auth-divider {
+    text-align: center; color: #9ca3af; font-size: 12px; margin: 16px 0;
+    position: relative;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: #e5e7eb;
+  }
+  .auth-divider::before { left: 0; }
+  .auth-divider::after { right: 0; }
+  .auth-hint {
+    font-size: 12px; color: #9ca3af; text-align: center; margin-top: 14px; line-height: 1.6;
+  }
+  .auth-error {
+    background: #fef2f2; color: #991b1b; padding: 10px 12px;
+    border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none;
+  }
+  .auth-error.show { display: block; }
+
+  /* ================ 首次加载 ================ */
+  .loading-screen {
+    position: fixed; inset: 0; z-index: 3100;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px;
+  }
+  .loading-screen.hidden { display: none; }
+  .loading-spinner {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; opacity: 0.85; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+</style>
+</head>
+<body>
+
+<!-- 加载遮罩 -->
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">正在初始化...</div>
+</div>
+
+<!-- 登录/注册遮罩 -->
+<div class="auth-overlay hidden" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-brand">🐾 宠物寄存格子管理系统</div>
+    <div class="auth-sub" id="authSub">登录门店账号，数据云端同步</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">登录</div>
+      <div class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">注册新门店</div>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <form class="auth-form" id="authForm" onsubmit="return false;">
+      <div class="form-group" id="storeNameGroup" style="display:none;">
+        <label>门店名称 *</label>
+        <input type="text" id="reg_storeName" placeholder="如：毛毛宠物纪念堂">
+      </div>
+      <div class="form-group">
+        <label>邮箱 *</label>
+        <input type="email" id="auth_email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label>密码 * (至少 6 位)</label>
+        <input type="password" id="auth_password" placeholder="••••••" autocomplete="current-password" minlength="6" required>
+      </div>
+      <button class="auth-btn" id="authSubmitBtn" onclick="submitAuth()">登 录</button>
+      <div class="auth-divider">OR</div>
+      <button type="button" class="btn btn-secondary" style="width:100%;justify-content:center;padding:10px;" onclick="forgotPassword()">重置密码（发送邮件）</button>
+      <div class="auth-hint">
+        数据存储于云端加密数据库 · 门店之间完全隔离<br>
+        忘记密码可通过邮箱重置
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 主应用 -->
+<div class="app" id="mainApp">
+  <div class="header">
+    <h1>🐾 宠物寄存格子管理系统
+      <span class="store-tag" id="storeTag" title="点击设置门店信息" onclick="editStoreInfo()">加载中...</span>
+    </h1>
+    <div class="header-actions">
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut" onclick="changeZoom(-0.1)" title="缩小">−</button>
+        <span id="zoomValue">100%</span>
+        <button class="zoom-btn" id="zoomIn" onclick="changeZoom(0.1)" title="放大">+</button>
+        <button class="zoom-btn" onclick="resetZoom()" title="重置" style="font-size:12px;">⟲</button>
+      </div>
+
+      <div class="search-wrap">
+        <input type="text" id="searchInput" placeholder="🔍 搜索宠物名 / 家长 / 品种..." autocomplete="off">
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+
+      <select id="filterSelect">
+        <option value="all">全部格子</option>
+        <option value="occupied">仅已寄存</option>
+        <option value="empty">仅空闲</option>
+        <option value="warning">纪念日临近</option>
+        <option value="danger">纪念日当天</option>
+      </select>
+      <button class="btn btn-primary" onclick="exportData()">📥 导出CSV</button>
+      <button class="btn btn-primary" onclick="importData()">📤 导入JSON</button>
+      <input type="file" id="importFile" accept=".json,.csv" style="display:none" onchange="handleImport(event)">
+      <button class="btn btn-ghost" id="syncBtn" onclick="manualSync()" title="手动同步云端">🔄 同步</button>
+      <button class="btn btn-ghost" id="logoutBtn" onclick="logout()">👤 退出</button>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item">总格子: <strong id="stat-total">120</strong></div>
+    <div class="stat-item">已寄存: <strong id="stat-occupied" style="color:#22c55e">0</strong></div>
+    <div class="stat-item">空闲: <strong id="stat-empty" style="color:#6b7280">120</strong></div>
+    <div class="stat-item">纪念日临近: <strong id="stat-warning" style="color:#eab308">0</strong></div>
+    <div class="stat-item">纪念日当天: <strong id="stat-danger" style="color:#ef4444">0</strong></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:2px dashed #d1d5db"></div>空闲</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#bbf7d0;border:2px solid #22c55e"></div>已寄存</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fde68a;border:2px solid #eab308"></div>临近(≤7天)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fca5a5;border:2px solid #ef4444"></div>当天</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="grid-area" id="gridArea">
+      <div class="grid-wrapper" id="grid"></div>
+    </div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-empty">
+        <div class="icon">🏠</div>
+        <h3>点击左侧格子查看详情</h3>
+        <p id="gridSizeHint">8行 × 15列 · 按「小·小·大」排列</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CRUD 模态框 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">添加寄存信息</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>宠物名字 *</label>
+          <input type="text" id="f_petName" placeholder="如：豆豆">
+        </div>
+        <div class="form-group">
+          <label>品种</label>
+          <input type="text" id="f_breed" placeholder="如：金毛">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>家长姓名</label>
+          <input type="text" id="f_owner" placeholder="如：张女士">
+        </div>
+        <div class="form-group">
+          <label>联系方式</label>
+          <input type="text" id="f_phone" placeholder="如：138****8888">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>入住日期</label>
+        <input type="date" id="f_checkIn">
+      </div>
+      <div class="form-group">
+        <label>纪念日</label>
+        <div class="memorial-list" id="memorialList"></div>
+        <div class="memorial-form" style="margin-top:8px;">
+          <input type="text" id="m_label" placeholder="标签，如：生日">
+          <input type="date" id="m_date">
+          <select id="m_repeat">
+            <option value="每年">每年</option>
+            <option value="每月">每月</option>
+            <option value="仅一次">仅一次</option>
+          </select>
+          <button class="btn btn-success" onclick="addMemorial()">+ 添加</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>备注</label>
+        <textarea id="f_notes" placeholder="写下关于这个宝贝的温馨回忆..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" id="btnDelete" style="display:none" onclick="deleteCurrent()" disabled>删除</button>
+      <button class="btn btn-primary" id="btnSave" onclick="saveData()" disabled>保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 门店设置模态框 -->
+<div class="modal-overlay" id="storeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>门店信息设置</h2>
+      <button class="modal-close" onclick="closeStoreModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>门店名称 *</label>
+        <input type="text" id="s_name">
+      </div>
+      <div class="form-group">
+        <label>门店地址</label>
+        <input type="text" id="s_address">
+      </div>
+      <div class="form-group">
+        <label>联系电话</label>
+        <input type="text" id="s_phone">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>行数</label>
+          <input type="number" id="s_rows" min="1" max="30">
+        </div>
+        <div class="form-group">
+          <label>列数</label>
+          <input type="number" id="s_cols" min="1" max="30">
+        </div>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
+        ⚠️ 调整行列数后，原有数据不会丢失，但超出范围的格子会被隐藏。<br>
+        建议在开业前一次性确定格子布局，避免运营中频繁调整。
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStoreModal()">取消</button>
+      <button class="btn btn-primary" id="btnSaveStore" onclick="saveStoreInfo()" disabled>保存设置</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==========================================================
+ *  Supabase 配置（上线前替换为你自己的项目信息）
+ *  在 Supabase 后台 -> Settings -> API 中获取
+ * ========================================================== */
+const SUPABASE_URL = 'https://fvthtlisifqdzllssylq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_91Xiy2fnAzhJ3lUw5Ao8DQ_8JZ_-RBK';
+
+/* ==========================================================
+ *  全局状态
+ * ========================================================== */
+let supabase = null;
+let currentUser = null;
+let currentStore = null;       // {store_id, name, address, rows_config, cols_config, pattern_config}
+let ROWS = 8, COLS = 15;
+let PATTERN = ['small','small','large'];
+let gridData = {};             // { r1c1: {petName, ..., memorials:[]} }
+let cellDbIds = {};            // { r1c1: 'cell-uuid' } 用于后续 update/delete
+let selectedKey = null;
+let tempMemorials = [];        // [{id, label, date, repeat}]   id = 已有ID 或 undefined (新增)
+let zoom = 1.0;
+const ZOOM_MIN = 0.5, ZOOM_MAX = 2.0;
+let isSaving = false;
+let authTab = 'login';
+
+/* ==========================================================
+ *  工具函数
+ * ========================================================== */
+function today() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => { t.className = 'toast' + (type ? ' ' + type : ''); }, 2600);
+}
+function setLoading(text) {
+  document.getElementById('loadingText').textContent = text || '加载中...';
+}
+function hideLoading() {
+  document.getElementById('loadingScreen').classList.add('hidden');
+}
+function showAuth(subText) {
+  document.getElementById('authOverlay').classList.remove('hidden');
+  if (subText) document.getElementById('authSub').textContent = subText;
+}
+function hideAuth() {
+  document.getElementById('authOverlay').classList.add('hidden');
+}
+function parsePattern(cfg) {
+  try {
+    const arr = JSON.parse(cfg || '["small","small","large"]');
+    return Array.isArray(arr) && arr.length ? arr : ['small','small','large'];
+  } catch (e) { return ['small','small','large']; }
+}
+
+/* ==========================================================
+ *  启动流程
+ * ========================================================== */
+window.addEventListener('DOMContentLoaded', async () => {
+  setLoading('正在连接云端服务...');
+
+  // 1. 初始化 Supabase 客户端
+  try {
+    if (!window.supabase || typeof SUPABASE_URL !== 'string' || SUPABASE_URL.startsWith('YOUR_')) {
+      // 开发者模式：提示替换配置
+      showConfigWarning();
+      return;
+    }
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+  } catch (err) {
+    console.error(err);
+    showToast('SDK 初始化失败，请检查网络', 'error');
+    return;
+  }
+
+  // 2. 检查登录状态
+  setLoading('正在验证账号...');
+  const { data: sessionData } = await supabase.auth.getSession();
+  const session = sessionData && sessionData.session;
+
+  if (!session) {
+    hideLoading();
+    showAuth();
+    return;
+  }
+
+  currentUser = session.user;
+  await bootstrapStore();
+
+  // 3. 监听登录状态变化
+  supabase.auth.onAuthStateChange((event, s) => {
+    if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      currentStore = null;
+      gridData = {};
+      cellDbIds = {};
+      renderGrid();
+      showAuth('已退出登录，请重新登录');
+    } else if (event === 'SIGNED_IN' && s) {
+      currentUser = s.user;
+      bootstrapStore();
+    }
+  });
+});
+
+function showConfigWarning() {
+  hideLoading();
+  document.getElementById('mainApp').style.display = 'none';
+  const card = document.createElement('div');
+  card.style.cssText = 'position:fixed;inset:0;background:#111827;color:white;display:flex;align-items:center;justify-content:center;padding:24px;';
+  card.innerHTML = `
+    <div style="max-width:640px;background:#1f2937;padding:28px 32px;border-radius:16px;line-height:1.8;">
+      <h2 style="font-size:20px;margin-bottom:14px;">⚠️ 请先配置 Supabase 项目信息</h2>
+      <p style="font-size:14px;color:#d1d5db;margin-bottom:14px;">
+        打开 <code style="background:#374151;padding:2px 6px;border-radius:4px;">public/index.html</code>
+        ，找到顶部两行：
+      </p>
+      <pre style="background:#0b1220;padding:14px;border-radius:8px;overflow:auto;font-size:13px;margin-bottom:14px;">const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';</pre>
+      <ol style="font-size:14px;color:#d1d5db;padding-left:18px;margin-bottom:14px;">
+        <li>注册并登录 <a href="https://supabase.com" target="_blank" style="color:#60a5fa;">supabase.com</a>，新建 Project</li>
+        <li>进入 Project → 左侧 <b>SQL Editor</b>，粘贴 <code style="background:#374151;padding:2px 6px;border-radius:4px;">supabase/migrations/001_init_schema.sql</code> 运行</li>
+        <li>进入 <b>Settings → API</b>，复制 Project URL 和 anon public key 替换上方两行</li>
+        <li>在 <b>Authentication → Providers</b> 中启用 Email 登录（建议关闭 Confirm email 以便测试）</li>
+        <li>刷新本页面即可进入注册/登录</li>
+      </ol>
+      <button onclick="location.reload()" style="padding:10px 22px;border:none;border-radius:8px;background:#667eea;color:white;font-weight:700;cursor:pointer;">我已配置，重新加载</button>
+    </div>
+  `;
+  document.body.appendChild(card);
+}
+
+async function bootstrapStore() {
+  setLoading('正在加载门店数据...');
+
+  // 1. 获取门店信息（RPC）
+  const { data: storeRows, error: storeErr } = await supabase.rpc('get_my_store');
+  if (storeErr || !storeRows || !storeRows.length) {
+    console.error(storeErr);
+    showToast('门店信息加载失败，正在重试...', 'error');
+    // 可能触发器还没执行，等 500ms 再试
+    await new Promise(r => setTimeout(r, 500));
+    const retry = await supabase.rpc('get_my_store');
+    if (retry.error || !retry.data || !retry.data.length) {
+      hideLoading();
+      showAuth('门店初始化失败，请联系管理员');
+      return;
+    }
+    currentStore = retry.data[0];
+  } else {
+    currentStore = storeRows[0];
+  }
+
+  // 2. 应用门店配置（行列数、Pattern）
+  ROWS = currentStore.rows_config || 8;
+  COLS = currentStore.cols_config || 15;
+  PATTERN = parsePattern(currentStore.pattern_config);
+  document.getElementById('gridSizeHint').textContent =
+    ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+  document.getElementById('grid').style.gridTemplateColumns =
+    '36px repeat(' + COLS + ', 1fr)';
+  document.getElementById('storeTag').textContent = '🏪 ' + (currentStore.name || '未命名门店');
+  document.getElementById('storeTag').title = (currentStore.name || '') + '\n点击修改门店信息';
+
+  // 3. 拉取格子数据（RPC 一次性返回）
+  setLoading('正在同步格子数据...');
+  await loadDataFromCloud();
+
+  // 4. 渲染
+  renderGrid();
+  if (selectedKey) renderDetail();
+  hideLoading();
+  showToast('数据同步完成', 'success');
+}
+
+/* ==========================================================
+ *  认证相关
+ * ========================================================== */
+function switchAuthTab(tab) {
+  authTab = tab;
+  document.querySelectorAll('.auth-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  document.getElementById('storeNameGroup').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('authSubmitBtn').textContent = tab === 'register' ? '创建门店账号' : '登 录';
+  document.getElementById('authError').classList.remove('show');
+}
+
+async function submitAuth() {
+  const email = document.getElementById('auth_email').value.trim();
+  const password = document.getElementById('auth_password').value;
+  const storeName = document.getElementById('reg_storeName').value.trim();
+  const errBox = document.getElementById('authError');
+  const btn = document.getElementById('authSubmitBtn');
+
+  errBox.classList.remove('show');
+  if (!email || !password) { errBox.textContent = '请填写邮箱和密码'; errBox.classList.add('show'); return; }
+  if (password.length < 6) { errBox.textContent = '密码至少 6 位'; errBox.classList.add('show'); return; }
+  if (authTab === 'register' && !storeName) { errBox.textContent = '请填写门店名称'; errBox.classList.add('show'); return; }
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '处理中...';
+
+  try {
+    if (authTab === 'register') {
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { store_name: storeName } }
+      });
+      if (error) throw error;
+      showToast('注册成功，正在自动登录...', 'success');
+      // 如果 Supabase 开启了邮箱确认，这里会是未登录状态
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        currentUser = data.session.user;
+        hideAuth();
+        await bootstrapStore();
+      } else {
+        errBox.textContent = '请先到邮箱确认后再登录（如未收到，可检查垃圾邮件或在 Supabase 后台关闭 Confirm email）';
+        errBox.classList.add('show');
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      showToast('登录成功', 'success');
+    }
+  } catch (err) {
+    console.error(err);
+    let msg = err.message || '操作失败';
+    if (msg.includes('Invalid login')) msg = '邮箱或密码错误';
+    if (msg.includes('already registered')) msg = '该邮箱已注册，请直接登录';
+    errBox.textContent = msg;
+    errBox.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function forgotPassword() {
+  const email = document.getElementById('auth_email').value.trim();
+  const errBox = document.getElementById('authError');
+  if (!email) { errBox.textContent = '请先填写邮箱'; errBox.classList.add('show'); return; }
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: location.origin + location.pathname
+  });
+  if (error) { errBox.textContent = error.message; errBox.classList.add('show'); return; }
+  showToast('重置密码邮件已发送，请查收', 'success');
+}
+
+async function logout() {
+  if (!confirm('确定要退出当前门店账号吗？')) return;
+  await supabase.auth.signOut();
+}
+
+/* ==========================================================
+ *  数据层：云端读写（替代原 localStorage）
+ * ========================================================== */
+async function loadDataFromCloud() {
+  const { data, error } = await supabase.rpc('get_store_grid');
+  if (error) { console.error(error); showToast('数据加载失败：' + error.message, 'error'); return false; }
+  const payload = data || { cells: [] };
+  const cells = payload.cells || [];
+  gridData = {};
+  cellDbIds = {};
+  cells.forEach(c => {
+    const key = c.cell_key;
+    cellDbIds[key] = c.cell_key;  // 占位，cells 表用 (store_id, cell_key) 做 upsert
+    gridData[key] = {
+      petName: c.pet_name,
+      breed: c.breed,
+      owner: c.owner_name,
+      phone: c.phone,
+      checkIn: c.check_in,
+      notes: c.notes,
+      memorials: (c.memorials || []).map(m => ({
+        id: m.id,
+        label: m.label,
+        date: m.date,
+        repeat: m.repeat
+      }))
+    };
+  });
+  return true;
+}
+
+async function manualSync() {
+  const btn = document.getElementById('syncBtn');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 同步中';
+  const ok = await loadDataFromCloud();
+  if (ok) {
+    renderGrid();
+    if (selectedKey) renderDetail();
+    showToast('已同步最新云端数据', 'success');
+  }
+  btn.disabled = false;
+  btn.innerHTML = origText;
+}
+
+/* ==========================================================
+ *  纪念日 & 状态计算（和原版保持一致）
+ * ========================================================== */
+function getCellStatus(key) {
+  const d = gridData[key];
+  if (!d) return 'empty';
+  let status = 'occupied';
+  for (const m of d.memorials || []) {
+    const next = getNextDate(m.date, m.repeat);
+    const days = daysUntil(next);
+    if (days === 0) return 'danger';
+    if (days <= 7) status = 'warning';
+  }
+  return status;
+}
+function getNextDate(dateStr, repeat) {
+  const parts = (dateStr || '').split('-');
+  if (parts.length < 3) return new Date(NaN);
+  const y = parseInt(parts[0]), m = parseInt(parts[1]), d = parseInt(parts[2]);
+  const now = today();
+  if (repeat === '仅一次') return new Date(y, m-1, d);
+  if (repeat === '每月') {
+    let next = new Date(now.getFullYear(), now.getMonth(), d);
+    if (next < now) next = new Date(now.getFullYear(), now.getMonth()+1, d);
+    return next;
+  }
+  let next = new Date(now.getFullYear(), m-1, d);
+  if (next < now) next = new Date(now.getFullYear()+1, m-1, d);
+  return next;
+}
+function daysUntil(date) {
+  if (!date || isNaN(date.getTime())) return 9999;
+  return Math.ceil((date - today()) / 86400000);
+}
+function getNearestMemorial(key) {
+  const d = gridData[key];
+  if (!d) return null;
+  let best = null;
+  for (const m of d.memorials || []) {
+    const next = getNextDate(m.date, m.repeat);
+    const days = daysUntil(next);
+    if (!best || days < best.days) best = { ...m, days: days, nextDate: next };
+  }
+  return best;
+}
+
+/* ==========================================================
+ *  缩放
+ * ========================================================== */
+function applyZoom() {
+  document.getElementById('grid').style.transform = 'scale(' + zoom + ')';
+  document.getElementById('zoomValue').textContent = Math.round(zoom * 100) + '%';
+  document.getElementById('zoomOut').disabled = zoom <= ZOOM_MIN;
+  document.getElementById('zoomIn').disabled = zoom >= ZOOM_MAX;
+}
+function changeZoom(delta) {
+  const newZoom = Math.round((zoom + delta) * 10) / 10;
+  if (newZoom < ZOOM_MIN || newZoom > ZOOM_MAX) return;
+  zoom = newZoom;
+  applyZoom();
+}
+function resetZoom() { zoom = 1.0; applyZoom(); }
+document.getElementById('gridArea').addEventListener('wheel', function(e) {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    changeZoom(e.deltaY > 0 ? -0.1 : 0.1);
+  }
+}, { passive: false });
+
+/* ==========================================================
+ *  搜索
+ * ========================================================== */
+function getSearchResults(query) {
+  if (!query) return [];
+  const q = query.toLowerCase().trim();
+  const results = [];
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const key = 'r' + r + 'c' + c;
+      const d = gridData[key];
+      if (!d) continue;
+      const hay = (d.petName || '') + ' ' + (d.breed || '') + ' ' + (d.owner || '');
+      if (hay.toLowerCase().includes(q)) {
+        results.push({ key: key, row: r, col: c, data: d });
+      }
+    }
+  }
+  return results;
+}
+function renderSearchDropdown() {
+  const input = document.getElementById('searchInput');
+  const dropdown = document.getElementById('searchDropdown');
+  const query = input.value.trim();
+  if (!query) { dropdown.classList.remove('active'); return; }
+  const results = getSearchResults(query);
+  if (results.length === 0) {
+    dropdown.innerHTML = '<div class="search-empty">未找到匹配结果</div>';
+    dropdown.classList.add('active');
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < results.length; i++) {
+    const item = results[i];
+    const d = item.data;
+    const size = PATTERN[(item.col-1) % PATTERN.length] === 'large' ? '大格子' : '小格子';
+    html +=
+      '<div class="search-item" data-key="' + item.key + '">' +
+        '<div class="search-item-avatar">🐾</div>' +
+        '<div class="search-item-info">' +
+          '<div class="search-item-title">' + (d.petName || '未命名') + ' <span style="color:#6b7280;font-weight:400">' + (d.breed || '') + '</span></div>' +
+          '<div class="search-item-sub">家长：' + (d.owner || '-') + ' · ' + size + '</div>' +
+        '</div>' +
+        '<div class="search-item-pos">' + item.row + '行' + item.col + '列</div>' +
+      '</div>';
+  }
+  dropdown.innerHTML = html;
+  dropdown.classList.add('active');
+  dropdown.querySelectorAll('.search-item').forEach(it => {
+    it.addEventListener('click', () => {
+      const key = it.dataset.key;
+      document.getElementById('searchInput').value = '';
+      dropdown.classList.remove('active');
+      jumpToCell(key);
+    });
+  });
+}
+function jumpToCell(key) {
+  selectCell(key);
+  const cell = document.querySelector('.cell[data-key="' + key + '"]');
+  if (cell) {
+    cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    cell.style.animation = 'none';
+    cell.offsetHeight;
+    cell.style.animation = 'pulse 0.6s ease 2';
+  }
+}
+function closeSearchDropdown() {
+  document.getElementById('searchDropdown').classList.remove('active');
+}
+document.getElementById('searchInput').addEventListener('input', () => {
+  renderSearchDropdown();
+  renderGrid();
+});
+document.getElementById('searchInput').addEventListener('focus', function() {
+  if (this.value.trim()) renderSearchDropdown();
+});
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.search-wrap');
+  if (!wrap.contains(e.target)) closeSearchDropdown();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSearchDropdown();
+});
+
+/* ==========================================================
+ *  渲染：格子 & 统计 & 详情
+ * ========================================================== */
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const filter = document.getElementById('filterSelect').value;
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  const corner = document.createElement('div');
+  grid.appendChild(corner);
+  for (let c = 1; c <= COLS; c++) {
+    const h = document.createElement('div');
+    h.className = 'col-header';
+    h.textContent = c;
+    grid.appendChild(h);
+  }
+  for (let r = 1; r <= ROWS; r++) {
+    const label = document.createElement('div');
+    label.className = 'row-label';
+    label.textContent = r;
+    grid.appendChild(label);
+
+    for (let c = 1; c <= COLS; c++) {
+      const size = PATTERN[(c-1) % PATTERN.length];
+      const key = 'r' + r + 'c' + c;
+      const d = gridData[key];
+      const status = getCellStatus(key);
+      const nearest = getNearestMemorial(key);
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + size + ' ' + status;
+      cell.dataset.key = key;
+      if (key === selectedKey) cell.classList.add('selected');
+
+      let matchesSearch = true;
+      if (search && d) {
+        const hay = (d.petName || '') + (d.breed || '') + (d.owner || '');
+        matchesSearch = hay.toLowerCase().includes(search);
+      }
+      let matchesFilter = true;
+      if (filter === 'occupied' && !d) matchesFilter = false;
+      if (filter === 'empty' && d) matchesFilter = false;
+      if (filter === 'warning' && status !== 'warning') matchesFilter = false;
+      if (filter === 'danger' && status !== 'danger') matchesFilter = false;
+
+      if (!matchesSearch || !matchesFilter) cell.classList.add('filtered-out');
+
+      if (d) {
+        if (nearest && nearest.days <= 7) {
+          cell.innerHTML = '<span style="font-size:9px;font-weight:700">' + (nearest.days === 0 ? '今天' : nearest.days + '天') + '</span>';
+        } else {
+          cell.innerHTML = '<span style="font-size:9px">' + (d.petName || '').substring(0, 2) + '</span>';
+        }
+        if (d.memorials && d.memorials.length > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'cell-badge';
+          badge.textContent = d.memorials.length;
+          cell.appendChild(badge);
+        }
+      }
+
+      cell.addEventListener('click', () => selectCell(key));
+      grid.appendChild(cell);
+    }
+  }
+  updateStats();
+}
+
+function updateStats() {
+  let occ = 0, warn = 0, dang = 0;
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const s = getCellStatus('r' + r + 'c' + c);
+      if (s !== 'empty') occ++;
+      if (s === 'warning') warn++;
+      if (s === 'danger') dang++;
+    }
+  }
+  document.getElementById('stat-total').textContent = ROWS * COLS;
+  document.getElementById('stat-occupied').textContent = occ;
+  document.getElementById('stat-empty').textContent = ROWS * COLS - occ;
+  document.getElementById('stat-warning').textContent = warn;
+  document.getElementById('stat-danger').textContent = dang;
+}
+
+function selectCell(key) {
+  selectedKey = key;
+  document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected'));
+  const el = document.querySelector('.cell[data-key="' + key + '"]');
+  if (el) el.classList.add('selected');
+  renderDetail();
+}
+
+function renderDetail() {
+  const panel = document.getElementById('detailPanel');
+  if (!selectedKey) {
+    panel.innerHTML = `
+      <div class="detail-empty">
+        <div class="icon">🏠</div>
+        <h3>点击左侧格子查看详情</h3>
+        <p>${ROWS}行 × ${COLS}列 · 按「${PATTERN.join('·')}」排列</p>
+      </div>`;
+    return;
+  }
+  const d = gridData[selectedKey];
+  const match = selectedKey.match(/r([0-9]+)c([0-9]+)/);
+  const r = match[1], c = match[2];
+  const size = PATTERN[(c-1) % PATTERN.length] === 'large' ? '大格子' : '小格子';
+
+  if (!d) {
+    panel.innerHTML =
+      '<div class="detail-empty">' +
+        '<div class="icon">📦</div>' +
+        '<h3>第 ' + r + ' 行 · 第 ' + c + ' 列</h3>' +
+        '<p>' + size + ' · 空闲</p>' +
+        '<button class="btn btn-primary" style="margin-top:16px;padding:10px 24px;font-size:14px;" onclick="openModal()">+ 添加寄存信息</button>' +
+      '</div>';
+    return;
+  }
+
+  const nearest = getNearestMemorial(selectedKey);
+  let badge = '<span class="badge badge-occupied">已寄存</span>';
+  if (nearest) {
+    if (nearest.days === 0) badge = '<span class="badge badge-danger">纪念日当天</span>';
+    else if (nearest.days <= 7) badge = '<span class="badge badge-warning">纪念日临近</span>';
+  }
+
+  let memorialsHtml = '';
+  const mems = d.memorials || [];
+  for (let i = 0; i < mems.length; i++) {
+    const m = mems[i];
+    const next = getNextDate(m.date, m.repeat);
+    const days = daysUntil(next);
+    let cls = 'safe', icon = '📅', extra = '还有 ' + days + ' 天';
+    if (days === 0) { cls = 'urgent'; icon = '🔔'; extra = '就是今天'; }
+    else if (days <= 7) { cls = 'warn'; icon = '⏰'; extra = '还有 ' + days + ' 天'; }
+    memorialsHtml +=
+      '<div class="memorial-item ' + cls + '">' +
+        '<span class="memorial-icon">' + icon + '</span>' +
+        '<div class="memorial-info">' +
+          '<strong>' + m.label + '</strong> · ' + m.date +
+          '<small>' + m.repeat + '提醒 · 下次：' + next.toISOString().slice(0,10) + ' · ' + extra + '</small>' +
+        '</div>' +
+      '</div>';
+  }
+  if (!memorialsHtml) memorialsHtml = '<div style="font-size:13px;color:#9ca3af;padding:8px 0">暂无纪念日设置</div>';
+
+  panel.innerHTML =
+    '<div class="detail-content">' +
+      '<div class="detail-header">' +
+        '<div class="detail-avatar">🐾</div>' +
+        '<div class="detail-title-block">' +
+          '<div class="detail-title">' + (d.petName || '未命名') + ' <span style="font-size:13px;font-weight:400;color:#6b7280">' + (d.breed || '') + '</span></div>' +
+          '<div class="detail-sub">' + badge + ' · 第' + r + '行第' + c + '列 · ' + size + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="detail-section">' +
+        '<div class="detail-section-title">基本信息</div>' +
+        '<div class="detail-row"><label>家长</label><span>' + (d.owner || '-') + '</span></div>' +
+        '<div class="detail-row"><label>联系方式</label><span>' + (d.phone || '-') + '</span></div>' +
+        '<div class="detail-row"><label>入住日期</label><span>' + (d.checkIn || '-') + '</span></div>' +
+      '</div>' +
+      '<div class="detail-section">' +
+        '<div class="detail-section-title">纪念日管理</div>' + memorialsHtml +
+      '</div>' +
+      '<div class="detail-section">' +
+        '<div class="detail-section-title">备注</div>' +
+        '<div class="notes-text">' + (d.notes || '暂无备注') + '</div>' +
+      '</div>' +
+      '<div class="detail-actions">' +
+        '<button class="btn btn-secondary" onclick="openModal()" ' + (isSaving ? 'disabled' : '') + '>✏️ 编辑</button>' +
+        '<button class="btn btn-danger" onclick="deleteCurrent()" ' + (isSaving ? 'disabled' : '') + '>🗑️ 删除</button>' +
+      '</div>' +
+    '</div>';
+}
+
+/* ==========================================================
+ *  CRUD 模态框
+ * ========================================================== */
+function openModal() {
+  const d = gridData[selectedKey];
+  document.getElementById('modalTitle').textContent = d ? '编辑寄存信息' : '添加寄存信息';
+  document.getElementById('f_petName').value = d ? d.petName || '' : '';
+  document.getElementById('f_breed').value = d ? d.breed || '' : '';
+  document.getElementById('f_owner').value = d ? d.owner || '' : '';
+  document.getElementById('f_phone').value = d ? d.phone || '' : '';
+  document.getElementById('f_checkIn').value = d ? d.checkIn || '' : '';
+  document.getElementById('f_notes').value = d ? d.notes || '' : '';
+  tempMemorials = d && d.memorials ? JSON.parse(JSON.stringify(d.memorials)) : [];
+  renderMemorialList();
+  document.getElementById('btnDelete').style.display = d ? 'inline-flex' : 'none';
+  document.getElementById('btnDelete').disabled = isSaving;
+  document.getElementById('btnSave').disabled = isSaving;
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+  tempMemorials = [];
+}
+function renderMemorialList() {
+  const list = document.getElementById('memorialList');
+  let html = '';
+  for (let i = 0; i < tempMemorials.length; i++) {
+    const m = tempMemorials[i];
+    html +=
+      '<div class="memorial-chip">' +
+        '<span>' + m.label + ' · ' + m.date + ' · ' + m.repeat + '</span>' +
+        '<button class="remove" onclick="removeMemorial(' + i + ')">&times;</button>' +
+      '</div>';
+  }
+  list.innerHTML = html || '<div style="font-size:12px;color:#9ca3af">还没有添加纪念日</div>';
+}
+function addMemorial() {
+  const label = document.getElementById('m_label').value.trim();
+  const date = document.getElementById('m_date').value;
+  const repeat = document.getElementById('m_repeat').value;
+  if (!label || !date) { showToast('请填写完整的纪念日信息', 'error'); return; }
+  tempMemorials.push({ label: label, date: date, repeat: repeat });
+  document.getElementById('m_label').value = '';
+  document.getElementById('m_date').value = '';
+  renderMemorialList();
+}
+function removeMemorial(idx) {
+  tempMemorials.splice(idx, 1);
+  renderMemorialList();
+}
+
+/* ==========================================================
+ *  保存 / 删除（云端写入）
+ * ========================================================== */
+async function saveData() {
+  if (!currentStore || isSaving) return;
+  const petName = document.getElementById('f_petName').value.trim();
+  if (!petName) { showToast('请填写宠物名字', 'error'); return; }
+
+  isSaving = true;
+  document.getElementById('btnSave').disabled = true;
+  document.getElementById('btnDelete').disabled = true;
+  document.getElementById('btnSave').textContent = '保存中...';
+
+  try {
+    const match = selectedKey.match(/r([0-9]+)c([0-9]+)/);
+    const row_num = parseInt(match[1]);
+    const col_num = parseInt(match[2]);
+
+    // 1. Upsert 格子数据（基于 store_id + cell_key 唯一约束）
+    const cellPayload = {
+      store_id: currentStore.store_id,
+      cell_key: selectedKey,
+      row_num: row_num,
+      col_num: col_num,
+      pet_name: petName,
+      breed: document.getElementById('f_breed').value.trim(),
+      owner_name: document.getElementById('f_owner').value.trim(),
+      phone: document.getElementById('f_phone').value.trim(),
+      check_in: document.getElementById('f_checkIn').value || null,
+      notes: document.getElementById('f_notes').value.trim()
+    };
+
+    const { error: cellErr } = await supabase
+      .from('cells')
+      .upsert(cellPayload, { onConflict: 'store_id,cell_key' });
+    if (cellErr) throw cellErr;
+
+    // 2. 重新拉 cell id，用于纪念日关联
+    const { data: cellRow, error: cellIdErr } = await supabase
+      .from('cells')
+      .select('id')
+      .eq('store_id', currentStore.store_id)
+      .eq('cell_key', selectedKey)
+      .single();
+    if (cellIdErr || !cellRow) throw new Error('无法获取格子ID');
+    const cellId = cellRow.id;
+
+    // 3. 纪念日同步策略：先删后插（简单可靠，避免复杂 diff）
+    //    原有带 id 的保留对比逻辑：直接 DELETE 所有旧的，再 INSERT tempMemorials
+    await supabase.from('memorials').delete().eq('cell_id', cellId);
+
+    if (tempMemorials.length) {
+      const memorialPayload = tempMemorials.map(m => ({
+        cell_id: cellId,
+        label: m.label,
+        memorial_date: m.date,
+        repeat_type: m.repeat || '每年'
+      }));
+      const { error: mErr } = await supabase.from('memorials').insert(memorialPayload);
+      if (mErr) throw mErr;
+    }
+
+    // 4. 更新本地缓存（不走全量拉取，响应更快）
+    gridData[selectedKey] = {
+      petName: cellPayload.pet_name,
+      breed: cellPayload.breed,
+      owner: cellPayload.owner_name,
+      phone: cellPayload.phone,
+      checkIn: cellPayload.check_in,
+      notes: cellPayload.notes,
+      memorials: tempMemorials.map(m => ({ id: null, label: m.label, date: m.date, repeat: m.repeat }))
+    };
+
+    closeModal();
+    renderGrid();
+    renderDetail();
+    showToast('已保存到云端', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('保存失败：' + (err.message || '未知错误'), 'error');
+  } finally {
+    isSaving = false;
+    document.getElementById('btnSave').disabled = false;
+    document.getElementById('btnDelete').disabled = false;
+    document.getElementById('btnSave').textContent = '保存';
+  }
+}
+
+async function deleteCurrent() {
+  if (!selectedKey || !gridData[selectedKey]) return;
+  if (!currentStore || isSaving) return;
+  if (!confirm('确定要删除这个寄存信息吗？云端数据将同步删除。')) return;
+
+  isSaving = true;
+  try {
+    const { error } = await supabase
+      .from('cells')
+      .delete()
+      .eq('store_id', currentStore.store_id)
+      .eq('cell_key', selectedKey);
+    if (error) throw error;
+
+    delete gridData[selectedKey];
+    closeModal();
+    renderGrid();
+    renderDetail();
+    showToast('已删除', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('删除失败：' + (err.message || '未知错误'), 'error');
+  } finally {
+    isSaving = false;
+  }
+}
+
+/* ==========================================================
+ *  导出 / 导入
+ * ========================================================== */
+function exportData() {
+  const rows = [['格子编号','行','列','格子大小','宠物名','品种','家长','联系方式','入住日期','备注']];
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const key = 'r' + r + 'c' + c;
+      const d = gridData[key];
+      if (d) {
+        rows.push([
+          key, r, c, PATTERN[(c-1) % PATTERN.length] === 'large' ? '大' : '小',
+          d.petName || '', d.breed || '', d.owner || '', d.phone || '', d.checkIn || '', d.notes || ''
+        ]);
+      }
+    }
+  }
+  const csv = rows.map(row =>
+    row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+  ).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (currentStore.name || '门店') + '_寄存数据_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV 导出成功', 'success');
+}
+
+function importData() {
+  document.getElementById('importFile').click();
+}
+function parseCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  const result = {};
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    if (!row || row.length < 10) continue;
+    const key = row[0].trim();
+    const r = parseInt(row[1]), c = parseInt(row[2]);
+    if (isNaN(r) || isNaN(c) || r < 1 || r > 999 || c < 1 || c > 999) continue;
+    const petName = row[4].trim();
+    if (!petName) continue;
+    result[key] = {
+      row_num: r,
+      col_num: c,
+      petName: petName,
+      breed: row[5].trim(),
+      owner: row[6].trim(),
+      phone: row[7].trim(),
+      checkIn: row[8].trim(),
+      notes: row[9].trim(),
+      memorials: []
+    };
+  }
+  return result;
+}
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i+1] === '"') { current += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ',') { result.push(current); current = ''; }
+      else current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+async function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file || !currentStore) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    let data = null;
+    const text = ev.target.result;
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+    try {
+      data = isCSV ? parseCSV(text) : JSON.parse(text);
+    } catch (err) {
+      showToast('导入失败：文件格式错误', 'error'); return;
+    }
+    if (!data || Object.keys(data).length === 0) {
+      showToast('导入失败：未找到有效数据', 'error'); return;
+    }
+    const action = isCSV ? '追加/覆盖（不删除现有格子）' : '完全覆盖当前门店所有数据';
+    const count = Object.keys(data).length;
+    if (!confirm('确定导入 ' + count + ' 条记录？\n操作方式：' + action + '\n建议先导出 CSV 做备份。')) return;
+
+    isSaving = true;
+    showToast('正在导入 ' + count + ' 条，请稍候...');
+
+    try {
+      if (!isCSV) {
+        // JSON 模式：全量覆盖 → 先删除当前门店所有 cells（RLS 只允许删自己的）
+        await supabase.from('cells').delete().eq('store_id', currentStore.store_id);
+      }
+
+      // 分批写入，避免 URL 过长（Supabase REST 有 body 限制，一般 100 条/批足够）
+      const keys = Object.keys(data);
+      const BATCH = 100;
+      let inserted = 0;
+      for (let i = 0; i < keys.length; i += BATCH) {
+        const batchKeys = keys.slice(i, i + BATCH);
+        const cellBatch = batchKeys.map(k => {
+          const d = data[k];
+          return {
+            store_id: currentStore.store_id,
+            cell_key: k,
+            row_num: d.row_num || (parseInt(k.match(/r(\d+)/)?.[1]) || 0),
+            col_num: d.col_num || (parseInt(k.match(/c(\d+)/)?.[1]) || 0),
+            pet_name: d.petName,
+            breed: d.breed || '',
+            owner_name: d.owner || '',
+            phone: d.phone || '',
+            check_in: d.checkIn || null,
+            notes: d.notes || ''
+          };
+        }).filter(c => c.row_num > 0 && c.col_num > 0);
+
+        const { error: batchErr } = await supabase
+          .from('cells')
+          .upsert(cellBatch, { onConflict: 'store_id,cell_key' });
+        if (batchErr) throw batchErr;
+        inserted += cellBatch.length;
+      }
+
+      // CSV/JSON 都不含纪念日，暂不导入
+      await loadDataFromCloud();
+      renderGrid();
+      if (selectedKey) renderDetail();
+      showToast('导入成功：' + inserted + ' 条', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('导入失败：' + (err.message || '未知错误'), 'error');
+    } finally {
+      isSaving = false;
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+/* ==========================================================
+ *  门店信息编辑
+ * ========================================================== */
+function editStoreInfo() {
+  if (!currentStore) return;
+  document.getElementById('s_name').value = currentStore.name || '';
+  document.getElementById('s_address').value = currentStore.address || '';
+  document.getElementById('s_phone').value = currentStore.contact_phone || '';
+  document.getElementById('s_rows').value = currentStore.rows_config || 8;
+  document.getElementById('s_cols').value = currentStore.cols_config || 15;
+  document.getElementById('btnSaveStore').disabled = false;
+  document.getElementById('storeModal').classList.add('active');
+}
+function closeStoreModal() {
+  document.getElementById('storeModal').classList.remove('active');
+}
+async function saveStoreInfo() {
+  const name = document.getElementById('s_name').value.trim();
+  if (!name) { showToast('请填写门店名称', 'error'); return; }
+  const rows = Math.min(30, Math.max(1, parseInt(document.getElementById('s_rows').value) || 8));
+  const cols = Math.min(30, Math.max(1, parseInt(document.getElementById('s_cols').value) || 15));
+  const btn = document.getElementById('btnSaveStore');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+  try {
+    const { error } = await supabase
+      .from('stores')
+      .update({
+        name: name,
+        address: document.getElementById('s_address').value.trim(),
+        contact_phone: document.getElementById('s_phone').value.trim(),
+        rows_config: rows,
+        cols_config: cols
+      })
+      .eq('id', currentStore.store_id);
+    if (error) throw error;
+
+    // 更新本地并重新渲染
+    currentStore.name = name;
+    currentStore.address = document.getElementById('s_address').value.trim();
+    currentStore.contact_phone = document.getElementById('s_phone').value.trim();
+    currentStore.rows_config = rows;
+    currentStore.cols_config = cols;
+    ROWS = rows;
+    COLS = cols;
+    document.getElementById('grid').style.gridTemplateColumns = '36px repeat(' + COLS + ', 1fr)';
+    document.getElementById('storeTag').textContent = '🏪 ' + name;
+    document.getElementById('gridSizeHint').textContent =
+      ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+
+    closeStoreModal();
+    renderGrid();
+    updateStats();
+    showToast('门店设置已保存', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('保存失败：' + (err.message || '未知错误'), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存设置';
+  }
+}
+
+/* ==========================================================
+ *  事件绑定（全局）
+ * ========================================================== */
+document.getElementById('filterSelect').addEventListener('change', renderGrid);
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+document.getElementById('storeModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('storeModal')) closeStoreModal();
+});
+
+/* ==========================================================
+ *  初次渲染占位（登录后会被 bootstrapStore() 覆盖）
+ * ========================================================== */
+applyZoom();
+</script>
+</body>
+</html>
