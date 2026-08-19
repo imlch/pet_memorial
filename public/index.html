@@ -384,22 +384,19 @@
   @keyframes saving { 0%,100% { opacity:0.3 } 50% { opacity:0.8 } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
 
-  /* 格子里的名字：居中显示，最多 2 行省略，大小格字号区分 + 字重统一 700 */
+  /* 格子里的名字：居中单行显示，小格/大格字号分层 */
   .cell-name {
     width: 100%;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    word-break: break-all;
+    display: block;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.15;
     font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .cell.small .cell-name { font-size: calc(var(--cell-fs-small, 11) * 1px); }
-  .cell.large .cell-name { font-size: calc(var(--cell-fs-large, 13) * 1px); -webkit-line-clamp: 1; line-clamp: 1; }
+  .cell.small .cell-name { font-size: calc(var(--cell-fs-small, 12) * 1px); }
+  .cell.large .cell-name { font-size: calc(var(--cell-fs-large, 14) * 1px); }
 
   /* 右上角状态 / 纪念日数量徽标 */
   .cell-badge {
@@ -1924,9 +1921,19 @@ function renderGrid() {
       if (!matchesSearch || !matchesFilter) cell.classList.add('filtered-out');
 
       if (d) {
-        // 主内容：显示宠物名字全称（不再显示临近天数/不再截断2字）
-        const petName = d.petName && String(d.petName).trim() ? String(d.petName).trim() : '（未命名）';
-        cell.innerHTML = '<span class="cell-name">' + escapeHTML(petName) + '</span>';
+        // 主内容：宠物名字显示
+        //  - 大格 (large)：显示全名，CSS 自动处理过长单行省略号
+        //  - 小格 (small)：超过 3 个字则「前3字…」（按字符长度判断，英/中同规则）
+        const colSize = getColumnType(c, PATTERN);
+        const isLarge = colSize === 'large';
+        const petRaw = d.petName && String(d.petName).trim() ? String(d.petName).trim() : '（未命名）';
+        let petDisplay = petRaw;
+        if (!isLarge) {
+          // 小格：>3 字符才加省略号（Unicode 字符长度）
+          const petChars = Array.from(petRaw);
+          if (petChars.length > 3) petDisplay = petChars.slice(0, 3).join('') + '…';
+        }
+        cell.innerHTML = '<span class="cell-name">' + escapeHTML(petDisplay) + '</span>';
 
         // 右上角徽章：
         //   - danger 状态（纪念日当天）：显示「今天」文字徽章（danger 红）
