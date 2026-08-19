@@ -648,6 +648,59 @@ function today() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
+/**
+ * 把 Supabase / fetch 抛出的原始错误，翻译成用户看得懂的中文提示
+ * 专门对付 "Failed to fetch" 这种无信息报错
+ * 返回 { user: "给用户看的中文", raw: "开发者调试用的完整错误" }
+ */
+function friendlySupabaseErr(err) {
+  if (!err) return { user: '未知错误', raw: '' };
+  // 提取字符串化的消息
+  const rawObj = typeof err === 'string' ? { message: err } : err;
+  const code    = rawObj.code    || rawObj.status  || '';
+  const msg     = (rawObj.message || rawObj.msg || rawObj.error_description || String(err || '')).toString();
+  const details = rawObj.details || rawObj.hint || '';
+  const rawStr  = JSON.stringify(err, null, 0);
+
+  // ---- 最常见：CORS / 网络错误（真实 SQL 异常 -> Supabase 500 -> 浏览器抛 Failed to fetch） ----
+  if (/failed to fetch|networkerror|typeerror.*fetch|cors|网络错误/i.test(msg + ' ' + rawStr)) {
+    return {
+      user: '请求被浏览器拦截（真实错误通常藏在 Network 面板中）。请打开浏览器 F12 → Network → 红色的 rpc/rest/v1 请求 → Preview 查看 Supabase 返回的真正报错；常见根因：① 数据库 SQL/RLS 异常 ② 未跑 FIX_03 脚本导致 RPC 没授权 ③ 跨域被封',
+      raw:  msg + ' ' + details + ' ' + rawStr
+    };
+  }
+  // ---- JWT / 登录失效 ----
+  if (/invalid.*(token|jwt|signature)|jwt.*expired|token.*expired|unauthorized|401|无效令牌|令牌过期/i.test(msg + ' ' + code)) {
+    return { user: '登录已失效，请退出后重新登录', raw: rawStr };
+  }
+  // ---- 邮箱/密码错误 ----
+  if (/invalid login|email.*already registered|user.*already registered/i.test(msg)) {
+    return {
+      user: /already registered/.test(msg) ? '邮箱已注册过，请直接登录，或换一个邮箱' : '邮箱或密码错误',
+      raw:  rawStr
+    };
+  }
+  // ---- 数据库/RPC 抛业务异常（邀请码不存在/只有店主/…）----
+  if (/邀请码.*不存在|只有店主|权限|permission denied|42501|policy|rls/i.test(msg + ' ' + details)) {
+    return {
+      user: '数据库权限或业务校验失败：' + msg + (details ? '（' + details + '）' : ''),
+      raw:  rawStr
+    };
+  }
+  // ---- 找不到 RPC 函数 ----
+  if (/function.*does not exist|not found|404|rpc/i.test(msg + ' ' + code)) {
+    return { user: '后端 RPC 函数不存在，请返回 Supabase SQL Editor 重新完整运行 002 + FIX_02 + FIX_03 三个脚本', raw: rawStr };
+  }
+  // ---- 限流/配额 ----
+  if (/rate limit|too many|429|quota|限额|限流/i.test(msg + ' ' + code)) {
+    return { user: 'Supabase 请求太频繁（免费版有配额），请 1 分钟后再试', raw: rawStr };
+  }
+  // ---- 其余情况：直接显示 message + details ----
+  return {
+    user:  msg + (details && details !== msg ? '（详细：' + details + '）' : ''),
+    raw:   rawStr
+  };
+}
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -757,19 +810,59 @@ async function bootstrapStore() {
   setLoading('正在加载门店数据...');
 
   // 1. 获取门店信息（RPC）
-  const { data: storeRows, error: storeErr } = await supabase.rpc('get_my_store');
+  let storeRows = null, storeErr = null;
+  try {
+    const r1 = await supabase.rpc('get_my_store');
+    storeRows = r1.data; storeErr = r1.error;
+  } catch (e) {
+    storeErr = e;
+  }
   if (storeErr || !storeRows || !storeRows.length) {
-    console.error(storeErr);
-    showToast('门店信息加载失败，正在重试...', 'error');
-    // 可能触发器还没执行，等 500ms 再试
-    await new Promise(r => setTimeout(r, 500));
-    const retry = await supabase.rpc('get_my_store');
-    if (retry.error || !retry.data || !retry.data.length) {
+    const msg = friendlySupabaseErr(storeErr);
+    console.error('[get_my_store] error =', storeErr, 'raw =', msg.raw);
+    showToast('门店加载失败：' + msg.user + '，1 秒后重试...', 'error');
+    await new Promise(r => setTimeout(r, 800));
+    // 再试一次
+    try {
+      const r2 = await supabase.rpc('get_my_store');
+      if (!r2.error && r2.data && r2.data.length) {
+        currentStore = r2.data[0];
+      } else {
+        // 终极兜底：如果 RPC 没权限/坏了，直接走 SQL 查 stores + store_staff
+        const direct = await supabase
+          .from('store_staff')
+          .select(`store_id, role, full_name,
+                   stores:store_id (id, name, address, contact_phone, rows_config, cols_config, pattern_config, invite_code)`)
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .limit(1)
+          .maybeSingle();
+        if (direct.error || !direct.data) {
+          console.error('[bootstrapStore] 重试失败：', r2.error, direct.error);
+          hideLoading();
+          const raw = (r2.error || direct.error || {});
+          showAuth('门店初始化失败：' + friendlySupabaseErr(raw).user +
+            '\n\n可能原因：\n① 你刚注册但员工触发器未生效 → 退出重登\n② 还没跑 FIX_02 + 002 SQL 脚本 → 回 Supabase 跑完再刷新\n③ 数据库权限/RLS 配置错误');
+          return;
+        }
+        const s = direct.data.stores;
+        currentStore = {
+          store_id:       s.id,
+          name:           s.name,
+          address:        s.address,
+          contact_phone:  s.contact_phone,
+          rows_config:    s.rows_config,
+          cols_config:    s.cols_config,
+          pattern_config: s.pattern_config,
+          invite_code:    s.invite_code,
+          my_role:        direct.data.role,
+          my_full_name:   direct.data.full_name
+        };
+      }
+    } catch (e2) {
       hideLoading();
-      showAuth('门店初始化失败，请联系管理员');
+      showAuth('门店加载失败，请重新登录或检查网络：' + friendlySupabaseErr(e2).user);
       return;
     }
-    currentStore = retry.data[0];
   } else {
     currentStore = storeRows[0];
   }

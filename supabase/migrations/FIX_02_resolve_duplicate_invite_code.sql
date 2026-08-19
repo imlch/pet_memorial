@@ -42,26 +42,9 @@ $$ language plpgsql volatile;
 alter function public.gen_unique_invite_code() owner to postgres;
 grant execute on function public.gen_unique_invite_code() to postgres, authenticated;
 
--- ---------- 步骤 1：如果 002 已经执行到一半，先把 stores.invite_code 列恢复到「可空 + 无唯一约束」 ----------
--- （因为 002 第 15-17 行在第一次 alter 里就 inline 了 unique，即使事务回滚列也可能留下）
-do $$
-begin
-    -- 1.1 如果存在唯一约束名 stores_invite_code_key，先删掉（允许重复，方便后续重写）
-    if exists (
-        select 1 from pg_constraint
-         where conname = 'stores_invite_code_key' and conrelid = 'public.stores'::regclass
-    ) then
-        alter table public.stores drop constraint stores_invite_code_key;
-    end if;
-
-    -- 1.2 如果列上挂了其它的 invite_code 唯一约束（Supabase 有时会自动改名）也一起删
-    for (select conname from pg_constraint
-          where conrelid = 'public.stores'::regclass and contype = 'u') loop
-        -- 检查这个约束是否只含 invite_code 列
-    end loop;
-end $$;
-
--- 粗暴兜底：去掉所有 stores 上 invite_code 列上的唯一约束（任何命名）
+-- ---------- 步骤 1：如果 002 已经执行到一半，先把 stores.invite_code 列恢复到「可空 + 无任何唯一约束」 ----------
+-- （因为 002 第一次 alter 时 inline 了 unique，即使事务回滚列也可能残留约束）
+-- 粗暴兜底：去掉所有挂在 stores 表 invite_code 列上的唯一约束（无论任何命名）
 do $$
 declare r record;
 begin
