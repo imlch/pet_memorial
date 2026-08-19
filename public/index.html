@@ -1890,11 +1890,19 @@ function renderGrid() {
       if (!matchesSearch || !matchesFilter) cell.classList.add('filtered-out');
 
       if (d) {
-        if (nearest && nearest.days <= 7) {
-          cell.innerHTML = '<span style="font-size:9px;font-weight:700">' + (nearest.days === 0 ? '今天' : nearest.days + '天') + '</span>';
-        } else {
-          cell.innerHTML = '<span style="font-size:9px">' + (d.petName || '').substring(0, 2) + '</span>';
-        }
+        // 仅显示宠物名：最多 3 字符（中英文混合安全），根据字符数 + 格子大小 动态缩放字号
+        const rawName = (d.petName || '').trim();
+        const chars   = Array.from(rawName).slice(0, 3);
+        const name    = chars.join('');
+        const len     = chars.length;
+        const isLarge = (size === 'large');
+        let fontSize;
+        if (len <= 1)      fontSize = isLarge ? '26px' : '18px';
+        else if (len === 2) fontSize = isLarge ? '21px' : '15px';
+        else                fontSize = isLarge ? '16px' : '12px';
+        cell.innerHTML = '<span class="cell-name" style="font-size:' + fontSize +
+          ';line-height:1.1;text-align:center;white-space:nowrap;overflow:hidden;max-width:96%;">' +
+          escapeHTML(name) + '</span>';
         if (d.memorials && d.memorials.length > 0) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
