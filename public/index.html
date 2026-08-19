@@ -761,10 +761,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   currentUser = session.user;
-  await bootstrapStore();
+  try {
+    await bootstrapStore();
+  } catch (e) {
+    console.error('[DOMContentLoaded] bootstrapStore 异常：', e);
+    hideLoading();
+    showAuth('加载门店失败：' + friendlySupabaseErr(e).user + '\n请退出重新登录，或检查是否已执行 FIX_04 RLS 修复脚本');
+  }
 
   // 3. 监听登录状态变化
-  supabase.auth.onAuthStateChange((event, s) => {
+  supabase.auth.onAuthStateChange(async (event, s) => {
     if (event === 'SIGNED_OUT') {
       currentUser = null;
       currentStore = null;
@@ -774,7 +780,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       showAuth('已退出登录，请重新登录');
     } else if (event === 'SIGNED_IN' && s) {
       currentUser = s.user;
-      bootstrapStore();
+      try {
+        await bootstrapStore();
+      } catch (e) {
+        console.error('[SIGNED_IN] bootstrapStore 异常：', e);
+        hideLoading();
+        showAuth('登录成功但加载门店失败：' + friendlySupabaseErr(e).user);
+      }
     }
   });
 });
@@ -871,22 +883,27 @@ async function bootstrapStore() {
   ROWS = currentStore.rows_config || 8;
   COLS = currentStore.cols_config || 15;
   PATTERN = parsePattern(currentStore.pattern_config);
-  document.getElementById('gridSizeHint').textContent =
+  const hintEl = document.getElementById('gridSizeHint');
+  if (hintEl) hintEl.textContent =
     ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
-  document.getElementById('grid').style.gridTemplateColumns =
+  const gridEl = document.getElementById('grid');
+  if (gridEl) gridEl.style.gridTemplateColumns =
     '36px repeat(' + COLS + ', 1fr)';
 
   // 角色徽章（店主/店长/员工）
   const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
   const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
   const roleClass = (currentStore.my_role || 'owner');
-  document.getElementById('storeTag').innerHTML =
-    '🏪 ' + (currentStore.name || '未命名门店') +
-    ' <span class="role-badge ' + roleClass + '" style="margin-left:6px;">' + roleName + '</span>';
-  document.getElementById('storeTag').title =
-    (currentStore.name || '') + ' · ' + roleName +
-    (currentStore.my_full_name ? '：' + currentStore.my_full_name : '') +
-    '\n点击修改门店信息';
+  const storeTagEl = document.getElementById('storeTag');
+  if (storeTagEl) {
+    storeTagEl.innerHTML =
+      '🏪 ' + (currentStore.name || '未命名门店') +
+      ' <span class="role-badge ' + roleClass + '" style="margin-left:6px;">' + roleName + '</span>';
+    storeTagEl.title =
+      (currentStore.name || '') + ' · ' + roleName +
+      (currentStore.my_full_name ? '：' + currentStore.my_full_name : '') +
+      '\n点击修改门店信息';
+  }
 
   // 2.5 渲染邀请码展示条（新增）
   renderInviteBar();
@@ -1316,7 +1333,7 @@ function renderDetail() {
       <div class="detail-empty">
         <div class="icon">🏠</div>
         <h3>点击左侧格子查看详情</h3>
-        <p>${ROWS}行 × ${COLS}列 · 按「${PATTERN.join('·')}」排列</p>
+        <p id="gridSizeHint">${ROWS}行 × ${COLS}列 · 按「${PATTERN.join('·')}」排列</p>
       </div>`;
     return;
   }
