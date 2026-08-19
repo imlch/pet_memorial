@@ -109,6 +109,232 @@
   }
   .stat-item { display: flex; align-items: center; gap: 6px; }
   .stat-item strong { font-size: 16px; }
+  .reminder-btn {
+    position: relative;
+    margin-left: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    border: 1px solid #6366f1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all .18s ease;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+  }
+  .reminder-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4); }
+  .reminder-btn:active { transform: translateY(0); }
+  .reminder-badge {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(239, 68, 68, .5);
+  }
+  .reminder-badge:empty,
+  .reminder-badge[data-count="0"] { display: none !important; }
+
+  /* 纪念日模态窗口 */
+  .reminder-modal {
+    width: min(780px, 92vw);
+    max-height: 86vh;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .reminder-summary {
+    font-size: 12px;
+    color: #6366f1;
+    background: #eef2ff;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .reminder-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+  }
+  .reminder-tab {
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #6b7280;
+    font-weight: 500;
+    transition: all .15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .reminder-tab:hover { background: #eef2ff; color: #6366f1; }
+  .reminder-tab.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, .35);
+  }
+  .reminder-tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.25);
+    color: white;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .reminder-tab:not(.active) .reminder-tab-count {
+    background: #e5e7eb;
+    color: #4b5563;
+  }
+  .reminder-body {
+    overflow-y: auto;
+    padding: 18px 24px 24px;
+    flex: 1;
+  }
+  .reminder-loading,
+  .reminder-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: #9ca3af;
+    font-size: 14px;
+  }
+  .reminder-empty .empty-icon { font-size: 56px; display: block; margin-bottom: 12px; opacity: .6; }
+  .reminder-day-group { margin-bottom: 22px; }
+  .reminder-day-group:last-child { margin-bottom: 0; }
+  .reminder-day-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed #e5e7eb;
+  }
+  .reminder-day-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+  }
+  .reminder-day-sub {
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .reminder-day-chip {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .chip-today   { background: #fef2f2; color: #dc2626; }
+  .chip-week    { background: #fffbeb; color: #b45309; }
+  .chip-month   { background: #eff6ff; color: #1d4ed8; }
+  .chip-other   { background: #f3f4f6; color: #4b5563; }
+  .chip-late    { background: #fee2e2; color: #991b1b; }
+
+  .reminder-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #d1d5db;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all .18s ease;
+    position: relative;
+  }
+  .reminder-card:hover {
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    border-color: #c7d2fe;
+  }
+  .reminder-card.card-today   { border-left-color: #ef4444; background: linear-gradient(90deg,#fff1f2 0%,#ffffff 40%); }
+  .reminder-card.card-week    { border-left-color: #eab308; background: linear-gradient(90deg,#fffbeb 0%,#ffffff 40%); }
+  .reminder-card.card-month   { border-left-color: #3b82f6; background: linear-gradient(90deg,#eff6ff 0%,#ffffff 40%); }
+  .reminder-card.card-late    { border-left-color: #b91c1c; background: linear-gradient(90deg,#fee2e2 0%,#ffffff 40%); }
+
+  .rc-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+    background: linear-gradient(135deg,#e0e7ff 0%, #f3e8ff 100%);
+  }
+  .rc-info { flex: 1; min-width: 0; }
+  .rc-info-row1 {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .rc-pet {
+    font-size: 15px; font-weight: 700; color: #111827;
+  }
+  .rc-label-tag {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 600;
+  }
+  .rc-loc {
+    font-size: 12px; color: #6b7280; margin-left: auto;
+  }
+  .rc-info-row2 {
+    display: flex; align-items: center; gap: 14px; font-size: 12px; color: #6b7280;
+    flex-wrap: wrap;
+  }
+  .rc-info-row2 .rc-meta { display: inline-flex; align-items: center; gap: 3px; }
+  .rc-days-left {
+    font-weight: 700;
+    font-size: 13px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .rc-days-left.days-today   { background: #ef4444; color: white; }
+  .rc-days-left.days-week    { background: #eab308; color: white; }
+  .rc-days-left.days-month   { background: #3b82f6; color: white; }
+  .rc-days-left.days-other   { background: #6b7280; color: white; }
+  .rc-days-left.days-late    { background: #b91c1c; color: white; }
+  .rc-arrow {
+    color: #c7d2fe; font-size: 20px; font-weight: 700; flex-shrink: 0;
+  }
+
+  /* 被跳转的格子高亮动效（复用但加深） */
+  .cell.jump-highlight {
+    outline: 3px solid #6366f1;
+    outline-offset: 2px;
+    z-index: 100;
+    animation: jumpPulse 1.2s ease-in-out 3;
+  }
+  @keyframes jumpPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,.6); }
+    50%     { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+  }
+
   .legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: #6b7280; }
   .legend-item { display: flex; align-items: center; gap: 5px; }
   .legend-dot { width: 14px; height: 14px; border-radius: 4px; border: 2px solid transparent; }
@@ -491,6 +717,12 @@
     <div class="stat-item">空闲: <strong id="stat-empty" style="color:#6b7280">120</strong></div>
     <div class="stat-item">纪念日临近: <strong id="stat-warning" style="color:#eab308">0</strong></div>
     <div class="stat-item">纪念日当天: <strong id="stat-danger" style="color:#ef4444">0</strong></div>
+
+    <button class="reminder-btn" id="reminderBtn" onclick="openReminder()" title="查看今日/近期纪念日清单">
+      🔔 纪念日提醒
+      <span class="reminder-badge" id="reminderBadge" style="display:none">0</span>
+    </button>
+
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:2px dashed #d1d5db"></div>空闲</div>
       <div class="legend-item"><div class="legend-dot" style="background:#bbf7d0;border:2px solid #22c55e"></div>已寄存</div>
@@ -610,6 +842,38 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeStoreModal()">取消</button>
       <button class="btn btn-primary" id="btnSaveStore" onclick="saveStoreInfo()" disabled>保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- 纪念日提醒弹窗 -->
+<div class="modal-overlay reminder-overlay" id="reminderModal">
+  <div class="modal reminder-modal">
+    <div class="modal-header" style="padding:18px 24px;border-bottom:1px solid #e5e7eb;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h2 style="font-size:18px;margin:0;">🔔 纪念日提醒中心</h2>
+        <span id="reminderSummary" class="reminder-summary">加载中...</span>
+      </div>
+      <button class="modal-close" onclick="closeReminder()">&times;</button>
+    </div>
+
+    <div class="reminder-tabs" id="reminderTabs">
+      <button class="reminder-tab active" data-tab="today"    onclick="switchReminderTab('today')">
+        今天 <span class="reminder-tab-count" id="rc-today">0</span>
+      </button>
+      <button class="reminder-tab" data-tab="week7"    onclick="switchReminderTab('week7')">
+        7 天内 <span class="reminder-tab-count" id="rc-week7">0</span>
+      </button>
+      <button class="reminder-tab" data-tab="month"    onclick="switchReminderTab('month')">
+        本月 <span class="reminder-tab-count" id="rc-month">0</span>
+      </button>
+      <button class="reminder-tab" data-tab="all"      onclick="switchReminderTab('all')">
+        全部 <span class="reminder-tab-count" id="rc-all">0</span>
+      </button>
+    </div>
+
+    <div class="reminder-body" id="reminderBody">
+      <div class="reminder-loading">正在扫描纪念日...</div>
     </div>
   </div>
 </div>
@@ -922,6 +1186,7 @@ async function bootstrapStore() {
     if (selectedKey) renderDetail();
     hideLoading();
     showToast('数据同步完成', 'success');
+    updateReminderBadge();  // ★ 徽标自动更新（今日/本周纪念日计数）
   } finally {
     // 无论成功/异常/return，最后都解锁 _bootstrapLoading
     setTimeout(() => { _bootstrapLoading = false; }, 300);
@@ -1095,6 +1360,7 @@ async function manualSync() {
   if (ok) {
     renderGrid();
     if (selectedKey) renderDetail();
+    updateReminderBadge();  // ★ 手动同步也更新徽标
     showToast('已同步最新云端数据', 'success');
   }
   btn.disabled = false;
@@ -1145,6 +1411,286 @@ function getNearestMemorial(key) {
     if (!best || days < best.days) best = { ...m, days: days, nextDate: next };
   }
   return best;
+}
+
+/* ==========================================================
+ *  纪念日提醒中心
+ * ========================================================== */
+let _reminderTab = 'today';
+
+/**
+ * 扫描全门店所有纪念日，返回结构化的数组（按 nextDate 升序）
+ * 每条包含：{ cellKey, row, col, petName, breed, owner, memorialId, label, originalDate, repeat, nextDate, days, status, bucket }
+ *   status: 'today'(=0) | 'soon'(1~7) | 'month'(8~31) | 'later'(>31) | 'late'(<0)
+ *   bucket: 方便筛选的分类
+ */
+function scanMemorials() {
+  const list = [];
+  const t = today();
+  const monthEnd = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  const monthEndDays = Math.ceil((monthEnd - t) / 86400000);
+
+  for (const key in gridData) {
+    const d = gridData[key];
+    if (!d) continue;
+    const m = key.match(/r(\d+)c(\d+)/);
+    const row = m ? parseInt(m[1], 10) : 0;
+    const col = m ? parseInt(m[2], 10) : 0;
+    for (const memorial of (d.memorials || [])) {
+      const nextDate = getNextDate(memorial.date, memorial.repeat);
+      const days     = daysUntil(nextDate);
+      let status = 'later';
+      if (days < 0)                 status = 'late';
+      else if (days === 0)          status = 'today';
+      else if (days <= 7)           status = 'soon';
+      else if (days <= monthEndDays) status = 'month';
+      list.push({
+        cellKey: key,
+        row, col,
+        petName:    d.petName || '（未命名）',
+        breed:      d.breed || '',
+        owner:      d.owner || '',
+        phone:      d.phone || '',
+        memorialId: memorial.id   || null,
+        label:      memorial.label || '纪念日',
+        originalDate: memorial.date || '',
+        repeat:     memorial.repeat || '每年',
+        nextDate,
+        days,
+        status
+      });
+    }
+  }
+  list.sort((a, b) => a.days - b.days);
+  return list;
+}
+
+/**
+ * 根据当前筛选的 tab 过滤 scanMemorials 结果
+ */
+function filterReminderByTab(all, tab) {
+  switch (tab) {
+    case 'today': return all.filter(x => x.status === 'today');
+    case 'week7': return all.filter(x => x.status === 'today' || x.status === 'soon');
+    case 'month': return all.filter(x => ['today','soon','month'].includes(x.status));
+    case 'late':  return all.filter(x => x.status === 'late');
+    case 'all':   return all;
+    default:      return all;
+  }
+}
+
+/** 格式化 Date -> 「2026-08-20 周三」**/
+function formatDateNice(d) {
+  if (!d) return '';
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  const weekdays = ['周日','周一','周二','周三','周四','周五','周六'];
+  return `${y}-${m}-${day} ${weekdays[d.getDay()]}`;
+}
+
+/** 计算相对天数的文案 & statusClass */
+function daysLabel(days, status) {
+  if (status === 'late')    return { text: `已过 ${Math.abs(days)} 天`, cls: 'days-late' };
+  if (days === 0)           return { text: '就是今天', cls: 'days-today' };
+  if (days === 1)           return { text: '明天', cls: 'days-week' };
+  if (days <= 7)            return { text: `还有 ${days} 天`, cls: 'days-week' };
+  if (days <= 31)           return { text: `还有 ${days} 天`, cls: 'days-month' };
+  return { text: `还有 ${days} 天`, cls: 'days-other' };
+}
+
+/** 把纪念日按日期（YYYY-MM-DD）分组，用于渲染分组卡片 */
+function groupReminderByDate(list) {
+  const groups = {};
+  for (const item of list) {
+    const key = formatDateNice(item.nextDate).split(' ')[0];
+    if (!groups[key]) groups[key] = { dateKey: key, nextDate: item.nextDate, items: [] };
+    groups[key].items.push(item);
+  }
+  return Object.values(groups).sort((a, b) => a.nextDate - b.nextDate);
+}
+
+function updateReminderBadge() {
+  const all = scanMemorials();
+  const todayCount = all.filter(x => x.status === 'today').length;
+  const soonCount  = all.filter(x => x.status === 'today' || x.status === 'soon').length;
+  const monthCount = all.filter(x => ['today','soon','month'].includes(x.status)).length;
+  const lateCount  = all.filter(x => x.status === 'late').length;
+  const badge = document.getElementById('reminderBadge');
+  if (badge) {
+    const c = soonCount;  // 徽标展示：今日+7天内
+    if (c > 0) {
+      badge.textContent = c;
+      badge.setAttribute('data-count', String(c));
+      badge.style.display = '';
+    } else {
+      badge.textContent = '0';
+      badge.setAttribute('data-count', '0');
+      badge.style.display = 'none';
+    }
+  }
+  const rcToday = document.getElementById('rc-today');
+  const rcWeek7 = document.getElementById('rc-week7');
+  const rcMonth = document.getElementById('rc-month');
+  const rcAll   = document.getElementById('rc-all');
+  if (rcToday) rcToday.textContent = todayCount;
+  if (rcWeek7) rcWeek7.textContent = soonCount;
+  if (rcMonth) rcMonth.textContent = monthCount;
+  if (rcAll)   rcAll.textContent   = all.length;
+  // summary 里显示：今天 X 个 · 本周 Y 个 · 本月 Z 个
+  const summary = document.getElementById('reminderSummary');
+  if (summary) {
+    const parts = [];
+    if (todayCount > 0) parts.push(`今天 ${todayCount}`);
+    if (soonCount  - todayCount > 0) parts.push(`本周 ${soonCount}`);
+    parts.push(`本月 ${monthCount}`);
+    if (lateCount > 0) parts.push(`逾期 ${lateCount}`);
+    summary.textContent = '📌 ' + parts.join(' · ');
+  }
+  return { all, todayCount, soonCount, monthCount, lateCount };
+}
+
+function switchReminderTab(tab) {
+  _reminderTab = tab || 'today';
+  document.querySelectorAll('.reminder-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === _reminderTab);
+  });
+  renderReminderBody();
+}
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderReminderBody() {
+  const body = document.getElementById('reminderBody');
+  if (!body) return;
+  const { all } = updateReminderBadge();
+  const list = filterReminderByTab(all, _reminderTab);
+
+  if (!list.length) {
+    let empty = '🎉 太棒了！';
+    let hint  = '当前筛选范围内没有需要关注的纪念日。';
+    if (_reminderTab === 'today') { empty = '🌞 今天没有纪念日'; hint = '可以切换到「7 天内」或「本月」查看即将到来的纪念日。'; }
+    else if (_reminderTab === 'week7') { empty = '🌸 一周内没有纪念日'; hint = '可以查看「本月」或全部清单。'; }
+    else if (_reminderTab === 'month') { empty = '🍀 本月没有纪念日'; hint = '可以查看全部清单。'; }
+    body.innerHTML = `
+      <div class="reminder-empty">
+        <span class="empty-icon">${empty.split(' ')[0]}</span>
+        <div style="font-size:15px;color:#4b5563;font-weight:600;margin-bottom:6px;">${escapeHTML(empty)}</div>
+        <div>${escapeHTML(hint)}</div>
+      </div>`;
+    return;
+  }
+
+  // 2. 按天分组 + 渲染
+  const groups = groupReminderByDate(list);
+  const petEmojis = ['🐶','🐱','🐰','🐹','🐻','🦊','🐼','🐶','🐱','🐰'];
+  let html = '';
+  for (const g of groups) {
+    const sample = g.items[0];
+    const chipCls = (() => {
+      if (sample.status === 'today') return 'chip-today';
+      if (sample.status === 'soon')  return 'chip-week';
+      if (sample.status === 'month') return 'chip-month';
+      if (sample.status === 'late')  return 'chip-late';
+      return 'chip-other';
+    })();
+    const chipText = (() => {
+      if (sample.status === 'today') return '今天';
+      if (sample.status === 'soon')  return '7 天内';
+      if (sample.status === 'month') return '本月';
+      if (sample.status === 'late')  return '已逾期';
+      return '稍后';
+    })();
+    const dayDiff = daysUntil(g.nextDate);
+    const subText =
+      sample.status === 'today' ? '就是今天！请记得联系家长' :
+      sample.status === 'late'  ? `已过 ${Math.abs(dayDiff)} 天，请尽快处理` :
+      `距离还有 ${dayDiff} 天`;
+
+    html += `<div class="reminder-day-group">
+      <div class="reminder-day-header">
+        <div class="reminder-day-title">${escapeHTML(formatDateNice(g.nextDate))}</div>
+        <div class="reminder-day-sub">${escapeHTML(subText)} · ${g.items.length} 条</div>
+        <span class="reminder-day-chip ${chipCls}">${chipText}</span>
+      </div>`;
+
+    for (const item of g.items) {
+      const dl = daysLabel(item.days, item.status);
+      const cardCls =
+        item.status === 'today' ? 'card-today' :
+        item.status === 'soon'  ? 'card-week'  :
+        item.status === 'month' ? 'card-month' :
+        item.status === 'late'  ? 'card-late'  : '';
+      const emoji = petEmojis[(item.cellKey.length + item.petName.length) % petEmojis.length];
+      const locSub = [
+        item.breed ? `🐾 ${item.breed}` : '',
+        item.owner ? `👤 ${item.owner}` : '',
+        item.phone ? `📱 ${item.phone}` : ''
+      ].filter(Boolean).join('  ·  ');
+
+      html += `
+        <div class="reminder-card ${cardCls}" data-cell="${escapeHTML(item.cellKey)}"
+             onclick="jumpToCell('${escapeHTML(item.cellKey)}'); closeReminder();">
+          <div class="rc-avatar">${emoji}</div>
+          <div class="rc-info">
+            <div class="rc-info-row1">
+              <span class="rc-pet">${escapeHTML(item.petName)}</span>
+              <span class="rc-label-tag">${escapeHTML(item.label)}${item.repeat && item.repeat !== '仅一次' ? ' · ' + escapeHTML(item.repeat) : ''}</span>
+              <span class="rc-loc">第 ${item.row} 行 · 第 ${item.col} 列</span>
+            </div>
+            <div class="rc-info-row2">
+              ${locSub ? `<span class="rc-meta">${escapeHTML(locSub)}</span>` : ''}
+              <span class="rc-meta">📅 原日期：${escapeHTML(item.originalDate || '-')}</span>
+              <span class="rc-meta">🔁 周期：${escapeHTML(item.repeat || '每年')}</span>
+            </div>
+          </div>
+          <span class="rc-days-left ${dl.cls}">${dl.text}</span>
+          <span class="rc-arrow">→</span>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  body.innerHTML = html;
+}
+
+function openReminder() {
+  const modal = document.getElementById('reminderModal');
+  if (!modal) return;
+  _reminderTab = 'today';
+  document.querySelectorAll('.reminder-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === 'today');
+  });
+  modal.classList.add('active');
+  renderReminderBody();
+}
+
+function closeReminder() {
+  const modal = document.getElementById('reminderModal');
+  if (modal) modal.classList.remove('active');
+}
+
+/** 跳转到某个格子并高亮 + 选中（click 打开详情）**/
+function jumpToCell(cellKey) {
+  if (!cellKey) return;
+  // 确保主界面已经显示
+  const grid = document.getElementById('grid');
+  const cell = grid ? grid.querySelector('.cell[data-key="' + cellKey + '"]') : null;
+  if (!cell) {
+    // 如果格子还没渲染（极端情况）重渲一次
+    renderGrid();
+  }
+  selectCell(cellKey);
+  const cell2 = grid ? grid.querySelector('.cell[data-key="' + cellKey + '"]') : null;
+  if (cell2) {
+    cell2.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    cell2.classList.remove('jump-highlight');
+    // 强制 reflow 才重启动画
+    void cell2.offsetWidth;
+    cell2.classList.add('jump-highlight');
+    setTimeout(() => cell2.classList.remove('jump-highlight'), 3800);
+  }
 }
 
 /* ==========================================================
@@ -1583,6 +2129,7 @@ async function saveData() {
     renderGrid();
     renderDetail();
     showToast('已保存到云端', 'success');
+    updateReminderBadge();   // ★ 增/改完纪念日，计数徽标立即同步
   } catch (err) {
     console.error(err);
     showToast('保存失败：' + (err.message || '未知错误'), 'error');
@@ -1613,6 +2160,7 @@ async function deleteCurrent() {
     renderGrid();
     renderDetail();
     showToast('已删除', 'success');
+    updateReminderBadge();   // ★ 删除同步后更新徽标
   } catch (err) {
     console.error(err);
     showToast('删除失败：' + (err.message || '未知错误'), 'error');
@@ -1766,6 +2314,7 @@ async function handleImport(e) {
       await loadDataFromCloud();
       renderGrid();
       if (selectedKey) renderDetail();
+      updateReminderBadge();   // ★ 导入成功后更新徽标
       showToast('导入成功：' + inserted + ' 条', 'success');
     } catch (err) {
       console.error(err);
