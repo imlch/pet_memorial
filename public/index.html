@@ -384,7 +384,8 @@
   @keyframes saving { 0%,100% { opacity:0.3 } 50% { opacity:0.8 } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
 
-  /* 格子里的名字：统一单行显示，按「显示出来的字符长度」自动调字号（字越少越大） */
+  /* 格子里的名字：统一单行显示，按「显示出来的字符长度」自动调字号（字越少越大）
+     省略号只能由 JS 层在 >3 字时主动加「前3字…」，CSS 这层绝不自动加省略号 */
   .cell-name {
     width: 100%;
     display: block;
@@ -393,21 +394,23 @@
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: clip;       /* 关键修复：CSS 绝不自动补省略号，防止 ≤3 字莫名出现 … */
+    padding: 0 2px;            /* 两侧给点内边距，避免字贴边看起来被裁 */
+    box-sizing: border-box;
     /* 默认字号（兜底），会被下方 n-chars-* 覆盖 */
-    font-size: 13px;
+    font-size: 12px;
   }
-  /* n-chars-1 到 n-chars-4 分别对应显示 1/2/3/4 个字符（>3字的截成「前3字…」= 4 可视字符） */
-  .cell-name.n-chars-1 { font-size: 20px; letter-spacing: 1px; }
-  .cell-name.n-chars-2 { font-size: 17px; letter-spacing: 1px; }
-  .cell-name.n-chars-3 { font-size: 15px; }
-  .cell-name.n-chars-4 { font-size: 14px; }  /* >3字时「XXX…」刚好 4 可视字符 */
+  /* n-chars-1 到 n-chars-4：字号整体下调 1~2px，保证 2/3 字在小格里完整装下不被 clip */
+  .cell-name.n-chars-1 { font-size: 18px; letter-spacing: 1px; }
+  .cell-name.n-chars-2 { font-size: 15px; letter-spacing: 1px; }
+  .cell-name.n-chars-3 { font-size: 13px; }
+  .cell-name.n-chars-4 { font-size: 12px; }
 
-  /* 大格特殊：在上面基础上 +2px（因为大格更宽，能放更大的字） */
-  .cell.large .cell-name.n-chars-1 { font-size: 24px; }
-  .cell.large .cell-name.n-chars-2 { font-size: 21px; }
-  .cell.large .cell-name.n-chars-3 { font-size: 18px; }
-  .cell.large .cell-name.n-chars-4 { font-size: 16px; }
+  /* 大格特殊：在上面基础上 +2~3px（大格更宽，能放更大的字） */
+  .cell.large .cell-name.n-chars-1 { font-size: 22px; }
+  .cell.large .cell-name.n-chars-2 { font-size: 18px; }
+  .cell.large .cell-name.n-chars-3 { font-size: 16px; }
+  .cell.large .cell-name.n-chars-4 { font-size: 14px; }
 
   /* 右上角状态 / 纪念日数量徽标 */
   .cell-badge {
