@@ -363,17 +363,15 @@
   .cell {
     border-radius: 6px; cursor: pointer; transition: all 0.15s ease;
     display: flex; align-items: center; justify-content: center;
-    position: relative; border: 2px solid transparent; user-select: none;
-    padding: 4px;
-    overflow: hidden;
+    font-size: 10px; position: relative; border: 2px solid transparent; user-select: none;
   }
   .cell:hover { transform: scale(1.08); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .cell.small { aspect-ratio: 1; }
   .cell.large { aspect-ratio: 2 / 1; }
   .cell.empty { background: #e5e7eb; border: 2px dashed #d1d5db; color: #9ca3af; }
-  .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; }
-  .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; animation: pulse 2s infinite; }
-  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; animation: pulse 1.2s infinite; }
+  .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; font-weight: 600; }
+  .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; font-weight: 700; animation: pulse 2s infinite; }
+  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; font-weight: 700; animation: pulse 1.2s infinite; }
   .cell.selected { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
   .cell.filtered-out { opacity: 0.15; pointer-events: none; }
   .cell.saving::after {
@@ -383,47 +381,12 @@
   }
   @keyframes saving { 0%,100% { opacity:0.3 } 50% { opacity:0.8 } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
-
-  /* 格子里的名字：统一单行显示，按「显示出来的字符长度」自动调字号（字越少越大）
-     省略号只能由 JS 层在 >3 字时主动加「前3字…」，CSS 这层绝不自动加省略号 */
-  .cell-name {
-    width: 100%;
-    display: block;
-    text-align: center;
-    line-height: 1.15;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: clip;       /* 关键修复：CSS 绝不自动补省略号，防止 ≤3 字莫名出现 … */
-    padding: 0 2px;            /* 两侧给点内边距，避免字贴边看起来被裁 */
-    box-sizing: border-box;
-    /* 默认字号（兜底），会被下方 n-chars-* 覆盖 */
-    font-size: 12px;
-  }
-  /* n-chars-1 到 n-chars-4：字号整体下调 1~2px，保证 2/3 字在小格里完整装下不被 clip */
-  .cell-name.n-chars-1 { font-size: 18px; letter-spacing: 1px; }
-  .cell-name.n-chars-2 { font-size: 15px; letter-spacing: 1px; }
-  .cell-name.n-chars-3 { font-size: 13px; }
-  .cell-name.n-chars-4 { font-size: 12px; }
-
-  /* 大格特殊：在上面基础上 +2~3px（大格更宽，能放更大的字） */
-  .cell.large .cell-name.n-chars-1 { font-size: 22px; }
-  .cell.large .cell-name.n-chars-2 { font-size: 18px; }
-  .cell.large .cell-name.n-chars-3 { font-size: 16px; }
-  .cell.large .cell-name.n-chars-4 { font-size: 14px; }
-
-  /* 右上角状态 / 纪念日数量徽标 */
   .cell-badge {
-    position: absolute; top: -4px; right: -4px;
-    min-width: 14px; height: 14px; padding: 0 3px;
-    border-radius: 999px;
-    background: #ef4444; color: white; font-size: 9px;
-    display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+    position: absolute; top: -4px; right: -4px; width: 14px; height: 14px;
+    border-radius: 50%; background: #ef4444; color: white; font-size: 9px;
+    display: flex; align-items: center; justify-content: center; font-weight: 700;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    white-space: nowrap;
   }
-  .cell-badge.warn   { background: #eab308; color: #fff; }
-  .cell-badge.danger { background: #ef4444; color: #fff; }
 
   .detail-panel {
     width: 380px; background: white; border-left: 1px solid #e5e7eb;
@@ -776,7 +739,7 @@
       <div class="detail-empty">
         <div class="icon">🏠</div>
         <h3>点击左侧格子查看详情</h3>
-        <p id="gridSizeHint">8行 × 15列 · 按「小·小·大」排列</p>
+        <p id="gridSizeHint">8行 × 15列 · 第15列特殊小格 · 16列起大·小·小循环</p>
       </div>
     </div>
   </div>
@@ -1027,43 +990,28 @@ function parsePattern(cfg) {
 }
 
 /**
- * 根据列号（从 1 开始）获取格子大小类型
- * 规则：
- *   第 1~14 列：使用基础 PATTERN（默认 small·small·large）循环
- *   第 15 列  ：强制 small
- *   第 ≥16 列 ：使用扩展周期 large·small·small 循环
+ * 获取某一列的尺寸：'small' 或 'large'
+ * 规则（用户定制）：
+ *  - 第 1~14 列：按 PATTERN 循环（默认 小·小·大）
+ *  - 第 15 列：强制 small（单独小格）
+ *  - 第 16 列及以后：从 PATTERN[0] 重新开始 大·小·小？No → 用户说 16 列起「恢复大格小格小格」→ 即默认 PATTERN 循环
+ *           注意：用户原 PATTERN 默认是 [small, small, large] = 「小·小·大」
+ *                 现在 16 列起用户要「大·小·小」循环，所以对 16+ 用偏移量： PATTERN[ (c-16+2) % 3 ]  ← 即 16=large,17=small,18=small,19=large...
  */
-function getColumnType(col, basePattern) {
-  const c = Math.max(1, parseInt(col, 10) || 1);
-  const base = Array.isArray(basePattern) && basePattern.length ? basePattern : PATTERN;
-  if (c <= 14) {
-    return base[(c - 1) % base.length];
+function getColSize(c) {
+  const col = Number(c) || 0;
+  if (col < 15) {
+    // 1~14 列：原 PATTERN 正常循环
+    return PATTERN[(col - 1 + PATTERN.length) % PATTERN.length] || 'small';
   }
-  if (c === 15) {
+  if (col === 15) {
+    // 第 15 列：强制小格
     return 'small';
   }
-  // c >= 16：large·small·small 循环
-  const extPattern = ['large','small','small'];
-  const idx = (c - 16) % extPattern.length;
-  return extPattern[idx < 0 ? idx + extPattern.length : idx];
-}
-
-/**
- * 生成页面底部/空态/列配置变化时的友好排列提示
- * 支持「1-14 基础循环」「15 强制小」「16+ 扩展 large·small·small」多段说明
- */
-function getPatternHintText(cols, basePattern) {
-  const baseArr = Array.isArray(basePattern) && basePattern.length ? basePattern : PATTERN;
-  const baseCn = baseArr.map(t => t === 'large' ? '大' : '小').join('·');
-  const c = Math.max(1, parseInt(cols, 10) || 0);
-  if (c <= 14) {
-    return `${ROWS}行 × ${c}列 · 1-${c}列按「${baseCn}」循环`;
-  }
-  if (c === 15) {
-    return `${ROWS}行 × 15列 · 1-14列「${baseCn}」循环，第15列强制小格`;
-  }
-  // c >= 16
-  return `${ROWS}行 × ${c}列 · 1-14列「${baseCn}」循环，第15列小格，16列起按「大·小·小」循环`;
+  // 16 列及以后：重新循环，且用户要求「大格 小格 小格」循环
+  // 即 16=大, 17=小, 18=小, 19=大, 20=小, 21=小 ...
+  const RESET_PATTERN = ['large', 'small', 'small'];  // 16+ 的循环模式
+  return RESET_PATTERN[(col - 16) % RESET_PATTERN.length] || 'small';
 }
 
 /* ==========================================================
@@ -1227,7 +1175,8 @@ async function bootstrapStore() {
     COLS = currentStore.cols_config || 15;
     PATTERN = parsePattern(currentStore.pattern_config);
     const hintEl = document.getElementById('gridSizeHint');
-    if (hintEl) hintEl.textContent = getPatternHintText(COLS, PATTERN);
+    if (hintEl) hintEl.textContent =
+      ROWS + '行 × ' + COLS + '列 · 第15列特殊小格 · 16列起大·小·小循环';
     const gridEl = document.getElementById('grid');
     if (gridEl) gridEl.style.gridTemplateColumns =
       '36px repeat(' + COLS + ', 1fr)';
@@ -1500,6 +1449,8 @@ let _reminderTab = 'today';
 function scanMemorials() {
   const list = [];
   const t = today();
+  const monthEnd = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  const monthEndDays = Math.ceil((monthEnd - t) / 86400000);
 
   for (const key in gridData) {
     const d = gridData[key];
@@ -1514,6 +1465,7 @@ function scanMemorials() {
       if (days < 0)                 status = 'late';
       else if (days === 0)          status = 'today';
       else if (days <= 7)           status = 'soon';
+      else if (days <= monthEndDays) status = 'month';
       list.push({
         cellKey: key,
         row, col,
@@ -1606,9 +1558,9 @@ function updateReminderBadge() {
   if (summary) {
     const parts = [];
     if (todayCount > 0) parts.push(`今天 ${todayCount}`);
-    if (soonCount  - todayCount > 0) parts.push(`本周 ${soonCount}`);
-    if (lateCount > 0) parts.push(`逾期 ${lateCount}`);
-    if (!parts.length) parts.push('暂无临近纪念日');
+    if (soonCount - todayCount > 0) parts.push(`本周 ${soonCount}`);
+    if (lateCount > 0)  parts.push(`逾期 ${lateCount}`);
+    if (!parts.length)   parts.push(`共 ${all.length} 条`);
     summary.textContent = '📌 ' + parts.join(' · ');
   }
   return { all, todayCount, soonCount, lateCount };
@@ -1637,8 +1589,8 @@ function renderReminderBody() {
   if (!list.length) {
     let empty = '🎉 太棒了！';
     let hint  = '当前筛选范围内没有需要关注的纪念日。';
-    if (_reminderTab === 'today') { empty = '🌞 今天没有纪念日'; hint = '可以切换到「7 天内」查看即将到来的纪念日。'; }
-    else if (_reminderTab === 'week7') { empty = '🌸 一周内没有纪念日'; hint = '可以查看「全部」清单。'; }
+    if (_reminderTab === 'today')      { empty = '🌞 今天没有纪念日'; hint = '可以切换到「7 天内」或「全部」查看即将到来的纪念日。'; }
+    else if (_reminderTab === 'week7'){ empty = '🌸 7 天内没有纪念日'; hint = '可以查看「全部」清单。'; }
     body.innerHTML = `
       <div class="reminder-empty">
         <span class="empty-icon">${empty.split(' ')[0]}</span>
@@ -1657,12 +1609,14 @@ function renderReminderBody() {
     const chipCls = (() => {
       if (sample.status === 'today') return 'chip-today';
       if (sample.status === 'soon')  return 'chip-week';
+      if (sample.status === 'month') return 'chip-month';
       if (sample.status === 'late')  return 'chip-late';
       return 'chip-other';
     })();
     const chipText = (() => {
       if (sample.status === 'today') return '今天';
       if (sample.status === 'soon')  return '7 天内';
+      if (sample.status === 'month') return '本月';
       if (sample.status === 'late')  return '已逾期';
       return '稍后';
     })();
@@ -1684,6 +1638,7 @@ function renderReminderBody() {
       const cardCls =
         item.status === 'today' ? 'card-today' :
         item.status === 'soon'  ? 'card-week'  :
+        item.status === 'month' ? 'card-month' :
         item.status === 'late'  ? 'card-late'  : '';
       const emoji = petEmojis[(item.cellKey.length + item.petName.length) % petEmojis.length];
       const locSub = [
@@ -1813,7 +1768,7 @@ function renderSearchDropdown() {
   for (let i = 0; i < results.length; i++) {
     const item = results[i];
     const d = item.data;
-    const size = getColumnType(item.col, PATTERN) === 'large' ? '大格子' : '小格子';
+    const size = getColSize(item.col) === 'large' ? '大格子' : '小格子';
     html +=
       '<div class="search-item" data-key="' + item.key + '">' +
         '<div class="search-item-avatar">🐾</div>' +
@@ -1911,7 +1866,7 @@ function renderGrid() {
     grid.appendChild(label);
 
     for (let c = 1; c <= COLS; c++) {
-      const size = getColumnType(c, PATTERN);
+      const size = getColSize(c);
       const key = 'r' + r + 'c' + c;
       const d = gridData[key];
       const status = getCellStatus(key);
@@ -1935,42 +1890,12 @@ function renderGrid() {
       if (!matchesSearch || !matchesFilter) cell.classList.add('filtered-out');
 
       if (d) {
-        // 主内容：宠物名字（所有格子统一规则）
-        //  1. >3 个 Unicode 字符 → 「前3字…」
-        //  2. ≤3 字 → 显示全名
-        //  3. 根据最终显示出来的字符数（1/2/3/4）加 n-chars-* 类，CSS 自动匹配对应字号（字越少越大）
-        const petRaw = d.petName && String(d.petName).trim() ? String(d.petName).trim() : '（未命名）';
-        const petChars = Array.from(petRaw);
-        let petDisplay;
-        if (petChars.length > 3) {
-          petDisplay = petChars.slice(0, 3).join('') + '…';
+        if (nearest && nearest.days <= 7) {
+          cell.innerHTML = '<span style="font-size:9px;font-weight:700">' + (nearest.days === 0 ? '今天' : nearest.days + '天') + '</span>';
         } else {
-          petDisplay = petRaw;
+          cell.innerHTML = '<span style="font-size:9px">' + (d.petName || '').substring(0, 2) + '</span>';
         }
-        const displayLen = Math.min(4, Array.from(petDisplay).length);
-        const charsCls = 'n-chars-' + (displayLen < 1 ? 1 : displayLen);
-        cell.innerHTML =
-          '<span class="cell-name ' + charsCls + '">' + escapeHTML(petDisplay) + '</span>';
-
-        // 右上角徽章：
-        //   - danger 状态（纪念日当天）：显示「今天」文字徽章（danger 红）
-        //   - warning 状态（临近≤7天）：显示「N天」文字徽章（warn 黄）
-        //   - 否则只要有纪念日（>0）：显示数量徽章
-        if (nearest) {
-          const badge = document.createElement('span');
-          badge.className = 'cell-badge';
-          if (nearest.days === 0) {
-            badge.classList.add('danger');
-            badge.textContent = '今天';
-            badge.style.minWidth = '26px';
-          } else if (nearest.days <= 7) {
-            badge.classList.add('warn');
-            badge.textContent = nearest.days + '天';
-          } else if (d.memorials && d.memorials.length > 0) {
-            badge.textContent = d.memorials.length;
-          }
-          if (badge.textContent) cell.appendChild(badge);
-        } else if (d.memorials && d.memorials.length > 0) {
+        if (d.memorials && d.memorials.length > 0) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.textContent = d.memorials.length;
@@ -2017,14 +1942,14 @@ function renderDetail() {
       <div class="detail-empty">
         <div class="icon">🏠</div>
         <h3>点击左侧格子查看详情</h3>
-        <p id="gridSizeHint">${getPatternHintText(COLS, PATTERN)}</p>
+        <p id="gridSizeHint">${ROWS}行 × ${COLS}列 · 第15列特殊小格 · 16列起大·小·小循环</p>
       </div>`;
     return;
   }
   const d = gridData[selectedKey];
   const match = selectedKey.match(/r([0-9]+)c([0-9]+)/);
   const r = match[1], c = match[2];
-  const size = getColumnType(c, PATTERN) === 'large' ? '大格子' : '小格子';
+  const size = getColSize(c) === 'large' ? '大格子' : '小格子';
 
   if (!d) {
     panel.innerHTML =
@@ -2272,7 +2197,7 @@ function exportData() {
       const d = gridData[key];
       if (d) {
         rows.push([
-          key, r, c, getColumnType(c, PATTERN) === 'large' ? '大' : '小',
+          key, r, c, getColSize(c) === 'large' ? '大' : '小',
           d.petName || '', d.breed || '', d.owner || '', d.phone || '', d.checkIn || '', d.notes || ''
         ]);
       }
@@ -2555,8 +2480,9 @@ async function saveStoreInfo() {
     const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
     document.getElementById('storeTag').innerHTML =
       '🏪 ' + name + ' <span class="role-badge ' + (currentStore.my_role || 'owner') + '" style="margin-left:6px;">' + roleName + '</span>';
-    const sz = document.getElementById('gridSizeHint');
-    if (sz) sz.textContent = getPatternHintText(COLS, PATTERN);
+    const gs = document.getElementById('gridSizeHint');
+    if (gs) gs.textContent =
+      ROWS + '行 × ' + COLS + '列 · 第15列特殊小格 · 16列起大·小·小循环';
     renderInviteBar();
 
     closeStoreModal();
