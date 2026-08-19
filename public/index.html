@@ -635,6 +635,7 @@ let PATTERN = ['small','small','large'];
 let gridData = {};             // { r1c1: {petName, ..., memorials:[]} }
 let cellDbIds = {};            // { r1c1: 'cell-uuid' } 用于后续 update/delete
 let selectedKey = null;
+let _bootstrapLoading = false; // 防止 submitAuth() 主动加载 与 onAuthStateChange SIGNED_IN 重复触发
 let tempMemorials = [];        // [{id, label, date, repeat}]   id = 已有ID 或 undefined (新增)
 let zoom = 1.0;
 const ZOOM_MIN = 0.5, ZOOM_MAX = 2.0;
@@ -819,104 +820,112 @@ const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';</pre>
 }
 
 async function bootstrapStore() {
-  setLoading('正在加载门店数据...');
-
-  // 1. 获取门店信息（RPC）
-  let storeRows = null, storeErr = null;
+  // 防重入：submitAuth 主动调一次，SIGNED_IN 事件又调一次 -> 第二次跳过
+  if (_bootstrapLoading) return Promise.resolve();
+  _bootstrapLoading = true;
   try {
-    const r1 = await supabase.rpc('get_my_store');
-    storeRows = r1.data; storeErr = r1.error;
-  } catch (e) {
-    storeErr = e;
-  }
-  if (storeErr || !storeRows || !storeRows.length) {
-    const msg = friendlySupabaseErr(storeErr);
-    console.error('[get_my_store] error =', storeErr, 'raw =', msg.raw);
-    showToast('门店加载失败：' + msg.user + '，1 秒后重试...', 'error');
-    await new Promise(r => setTimeout(r, 800));
-    // 再试一次
+    setLoading('正在加载门店数据...');
+
+    // 1. 获取门店信息（RPC）
+    let storeRows = null, storeErr = null;
     try {
-      const r2 = await supabase.rpc('get_my_store');
-      if (!r2.error && r2.data && r2.data.length) {
-        currentStore = r2.data[0];
-      } else {
-        // 终极兜底：如果 RPC 没权限/坏了，直接走 SQL 查 stores + store_staff
-        const direct = await supabase
-          .from('store_staff')
-          .select(`store_id, role, full_name,
-                   stores:store_id (id, name, address, contact_phone, rows_config, cols_config, pattern_config, invite_code)`)
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .limit(1)
-          .maybeSingle();
-        if (direct.error || !direct.data) {
-          console.error('[bootstrapStore] 重试失败：', r2.error, direct.error);
-          hideLoading();
-          const raw = (r2.error || direct.error || {});
-          showAuth('门店初始化失败：' + friendlySupabaseErr(raw).user +
-            '\n\n可能原因：\n① 你刚注册但员工触发器未生效 → 退出重登\n② 还没跑 FIX_02 + 002 SQL 脚本 → 回 Supabase 跑完再刷新\n③ 数据库权限/RLS 配置错误');
-          return;
-        }
-        const s = direct.data.stores;
-        currentStore = {
-          store_id:       s.id,
-          name:           s.name,
-          address:        s.address,
-          contact_phone:  s.contact_phone,
-          rows_config:    s.rows_config,
-          cols_config:    s.cols_config,
-          pattern_config: s.pattern_config,
-          invite_code:    s.invite_code,
-          my_role:        direct.data.role,
-          my_full_name:   direct.data.full_name
-        };
-      }
-    } catch (e2) {
-      hideLoading();
-      showAuth('门店加载失败，请重新登录或检查网络：' + friendlySupabaseErr(e2).user);
-      return;
+      const r1 = await supabase.rpc('get_my_store');
+      storeRows = r1.data; storeErr = r1.error;
+    } catch (e) {
+      storeErr = e;
     }
-  } else {
-    currentStore = storeRows[0];
+    if (storeErr || !storeRows || !storeRows.length) {
+      const msg = friendlySupabaseErr(storeErr);
+      console.error('[get_my_store] error =', storeErr, 'raw =', msg.raw);
+      showToast('门店加载失败：' + msg.user + '，1 秒后重试...', 'error');
+      await new Promise(r => setTimeout(r, 800));
+      // 再试一次
+      try {
+        const r2 = await supabase.rpc('get_my_store');
+        if (!r2.error && r2.data && r2.data.length) {
+          currentStore = r2.data[0];
+        } else {
+          // 终极兜底：如果 RPC 没权限/坏了，直接走 SQL 查 stores + store_staff
+          const direct = await supabase
+            .from('store_staff')
+            .select(`store_id, role, full_name,
+                     stores:store_id (id, name, address, contact_phone, rows_config, cols_config, pattern_config, invite_code)`)
+            .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+            .limit(1)
+            .maybeSingle();
+          if (direct.error || !direct.data) {
+            console.error('[bootstrapStore] 重试失败：', r2.error, direct.error);
+            hideLoading();
+            const raw = (r2.error || direct.error || {});
+            showAuth('门店初始化失败：' + friendlySupabaseErr(raw).user +
+              '\n\n可能原因：\n① 你刚注册但员工触发器未生效 → 退出重登\n② 还没跑 FIX_02 + 002 SQL 脚本 → 回 Supabase 跑完再刷新\n③ 数据库权限/RLS 配置错误');
+            return;
+          }
+          const s = direct.data.stores;
+          currentStore = {
+            store_id:       s.id,
+            name:           s.name,
+            address:        s.address,
+            contact_phone:  s.contact_phone,
+            rows_config:    s.rows_config,
+            cols_config:    s.cols_config,
+            pattern_config: s.pattern_config,
+            invite_code:    s.invite_code,
+            my_role:        direct.data.role,
+            my_full_name:   direct.data.full_name
+          };
+        }
+      } catch (e2) {
+        hideLoading();
+        showAuth('门店加载失败，请重新登录或检查网络：' + friendlySupabaseErr(e2).user);
+        return;
+      }
+    } else {
+      currentStore = storeRows[0];
+    }
+
+    // 2. 应用门店配置（行列数、Pattern）
+    ROWS = currentStore.rows_config || 8;
+    COLS = currentStore.cols_config || 15;
+    PATTERN = parsePattern(currentStore.pattern_config);
+    const hintEl = document.getElementById('gridSizeHint');
+    if (hintEl) hintEl.textContent =
+      ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+    const gridEl = document.getElementById('grid');
+    if (gridEl) gridEl.style.gridTemplateColumns =
+      '36px repeat(' + COLS + ', 1fr)';
+
+    // 角色徽章（店主/店长/员工）
+    const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
+    const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
+    const roleClass = (currentStore.my_role || 'owner');
+    const storeTagEl = document.getElementById('storeTag');
+    if (storeTagEl) {
+      storeTagEl.innerHTML =
+        '🏪 ' + (currentStore.name || '未命名门店') +
+        ' <span class="role-badge ' + roleClass + '" style="margin-left:6px;">' + roleName + '</span>';
+      storeTagEl.title =
+        (currentStore.name || '') + ' · ' + roleName +
+        (currentStore.my_full_name ? '：' + currentStore.my_full_name : '') +
+        '\n点击修改门店信息';
+    }
+
+    // 2.5 渲染邀请码展示条（新增）
+    renderInviteBar();
+
+    // 3. 拉取格子数据（RPC 一次性返回）
+    setLoading('正在同步格子数据...');
+    await loadDataFromCloud();
+
+    // 4. 渲染
+    renderGrid();
+    if (selectedKey) renderDetail();
+    hideLoading();
+    showToast('数据同步完成', 'success');
+  } finally {
+    // 无论成功/异常/return，最后都解锁 _bootstrapLoading
+    setTimeout(() => { _bootstrapLoading = false; }, 300);
   }
-
-  // 2. 应用门店配置（行列数、Pattern）
-  ROWS = currentStore.rows_config || 8;
-  COLS = currentStore.cols_config || 15;
-  PATTERN = parsePattern(currentStore.pattern_config);
-  const hintEl = document.getElementById('gridSizeHint');
-  if (hintEl) hintEl.textContent =
-    ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
-  const gridEl = document.getElementById('grid');
-  if (gridEl) gridEl.style.gridTemplateColumns =
-    '36px repeat(' + COLS + ', 1fr)';
-
-  // 角色徽章（店主/店长/员工）
-  const roleMap = { owner: '店主', manager: '店长', staff: '员工' };
-  const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
-  const roleClass = (currentStore.my_role || 'owner');
-  const storeTagEl = document.getElementById('storeTag');
-  if (storeTagEl) {
-    storeTagEl.innerHTML =
-      '🏪 ' + (currentStore.name || '未命名门店') +
-      ' <span class="role-badge ' + roleClass + '" style="margin-left:6px;">' + roleName + '</span>';
-    storeTagEl.title =
-      (currentStore.name || '') + ' · ' + roleName +
-      (currentStore.my_full_name ? '：' + currentStore.my_full_name : '') +
-      '\n点击修改门店信息';
-  }
-
-  // 2.5 渲染邀请码展示条（新增）
-  renderInviteBar();
-
-  // 3. 拉取格子数据（RPC 一次性返回）
-  setLoading('正在同步格子数据...');
-  await loadDataFromCloud();
-
-  // 4. 渲染
-  renderGrid();
-  if (selectedKey) renderDetail();
-  hideLoading();
-  showToast('数据同步完成', 'success');
 }
 
 /* ==========================================================
@@ -997,19 +1006,32 @@ async function submitAuth() {
         errBox.classList.add('show');
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       showToast('登录成功', 'success');
+      // ★ 立即主动切换到主界面（不等待 onAuthStateChange，因为事件有时会延迟/被 SDK 吞）
+      if (data && data.session && data.user) {
+        currentUser = data.user;
+        hideAuth();
+        try {
+          await bootstrapStore();
+        } catch (e) {
+          console.error('[submitAuth:login] bootstrapStore 异常：', e);
+          showAuth('登录成功但加载门店失败：' + friendlySupabaseErr(e).user);
+        }
+      }
     }
   } catch (err) {
     console.error(err);
-    let msg = err.message || '操作失败';
-    if (msg.includes('Invalid login'))        msg = '邮箱或密码错误';
-    if (msg.includes('already registered'))   msg = '该邮箱已注册，请直接登录';
-    if (msg.includes('邀请码') && msg.includes('不存在'))
-      msg = '❌ 邀请码不存在或已过期，请向店主索取最新的 6 位邀请码';
-    if (msg.includes('只有店主'))             msg = '当前账号不是店主身份，操作被拒绝';
-    errBox.textContent = msg;
+    const msg = friendlySupabaseErr(err).user;
+    // 做一点针对 signUp / login 的文案覆盖（比通用翻译更精准）
+    const rawMsg = (err.message || '操作失败').toString();
+    let show = msg;
+    if (/invalid login/i.test(rawMsg))                         show = '邮箱或密码错误';
+    if (/already registered/i.test(rawMsg))                    show = '该邮箱已注册，请直接登录';
+    if (/邀请码.*不存在/.test(rawMsg + msg))                   show = '❌ 邀请码不存在或已过期，请向店主索取最新的 6 位邀请码';
+    if (/只有店主/.test(rawMsg + msg))                         show = '当前账号不是店主身份，操作被拒绝';
+    errBox.textContent = show;
     errBox.classList.add('show');
   } finally {
     btn.disabled = false;
