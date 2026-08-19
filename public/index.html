@@ -864,9 +864,6 @@
       <button class="reminder-tab" data-tab="week7"    onclick="switchReminderTab('week7')">
         7 天内 <span class="reminder-tab-count" id="rc-week7">0</span>
       </button>
-      <button class="reminder-tab" data-tab="month"    onclick="switchReminderTab('month')">
-        本月 <span class="reminder-tab-count" id="rc-month">0</span>
-      </button>
       <button class="reminder-tab" data-tab="all"      onclick="switchReminderTab('all')">
         全部 <span class="reminder-tab-count" id="rc-all">0</span>
       </button>
@@ -990,6 +987,46 @@ function parsePattern(cfg) {
     const arr = JSON.parse(cfg || '["small","small","large"]');
     return Array.isArray(arr) && arr.length ? arr : ['small','small','large'];
   } catch (e) { return ['small','small','large']; }
+}
+
+/**
+ * 根据列号（从 1 开始）获取格子大小类型
+ * 规则：
+ *   第 1~14 列：使用基础 PATTERN（默认 small·small·large）循环
+ *   第 15 列  ：强制 small
+ *   第 ≥16 列 ：使用扩展周期 large·small·small 循环
+ */
+function getColumnType(col, basePattern) {
+  const c = Math.max(1, parseInt(col, 10) || 1);
+  const base = Array.isArray(basePattern) && basePattern.length ? basePattern : PATTERN;
+  if (c <= 14) {
+    return base[(c - 1) % base.length];
+  }
+  if (c === 15) {
+    return 'small';
+  }
+  // c >= 16：large·small·small 循环
+  const extPattern = ['large','small','small'];
+  const idx = (c - 16) % extPattern.length;
+  return extPattern[idx < 0 ? idx + extPattern.length : idx];
+}
+
+/**
+ * 生成页面底部/空态/列配置变化时的友好排列提示
+ * 支持「1-14 基础循环」「15 强制小」「16+ 扩展 large·small·small」多段说明
+ */
+function getPatternHintText(cols, basePattern) {
+  const baseArr = Array.isArray(basePattern) && basePattern.length ? basePattern : PATTERN;
+  const baseCn = baseArr.map(t => t === 'large' ? '大' : '小').join('·');
+  const c = Math.max(1, parseInt(cols, 10) || 0);
+  if (c <= 14) {
+    return `${ROWS}行 × ${c}列 · 1-${c}列按「${baseCn}」循环`;
+  }
+  if (c === 15) {
+    return `${ROWS}行 × 15列 · 1-14列「${baseCn}」循环，第15列强制小格`;
+  }
+  // c >= 16
+  return `${ROWS}行 × ${c}列 · 1-14列「${baseCn}」循环，第15列小格，16列起按「大·小·小」循环`;
 }
 
 /* ==========================================================
@@ -1153,8 +1190,7 @@ async function bootstrapStore() {
     COLS = currentStore.cols_config || 15;
     PATTERN = parsePattern(currentStore.pattern_config);
     const hintEl = document.getElementById('gridSizeHint');
-    if (hintEl) hintEl.textContent =
-      ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+    if (hintEl) hintEl.textContent = getPatternHintText(COLS, PATTERN);
     const gridEl = document.getElementById('grid');
     if (gridEl) gridEl.style.gridTemplateColumns =
       '36px repeat(' + COLS + ', 1fr)';
@@ -1427,8 +1463,6 @@ let _reminderTab = 'today';
 function scanMemorials() {
   const list = [];
   const t = today();
-  const monthEnd = new Date(t.getFullYear(), t.getMonth() + 1, 0);
-  const monthEndDays = Math.ceil((monthEnd - t) / 86400000);
 
   for (const key in gridData) {
     const d = gridData[key];
@@ -1443,7 +1477,6 @@ function scanMemorials() {
       if (days < 0)                 status = 'late';
       else if (days === 0)          status = 'today';
       else if (days <= 7)           status = 'soon';
-      else if (days <= monthEndDays) status = 'month';
       list.push({
         cellKey: key,
         row, col,
@@ -1472,7 +1505,6 @@ function filterReminderByTab(all, tab) {
   switch (tab) {
     case 'today': return all.filter(x => x.status === 'today');
     case 'week7': return all.filter(x => x.status === 'today' || x.status === 'soon');
-    case 'month': return all.filter(x => ['today','soon','month'].includes(x.status));
     case 'late':  return all.filter(x => x.status === 'late');
     case 'all':   return all;
     default:      return all;
@@ -1512,7 +1544,6 @@ function updateReminderBadge() {
   const all = scanMemorials();
   const todayCount = all.filter(x => x.status === 'today').length;
   const soonCount  = all.filter(x => x.status === 'today' || x.status === 'soon').length;
-  const monthCount = all.filter(x => ['today','soon','month'].includes(x.status)).length;
   const lateCount  = all.filter(x => x.status === 'late').length;
   const badge = document.getElementById('reminderBadge');
   if (badge) {
@@ -1529,23 +1560,21 @@ function updateReminderBadge() {
   }
   const rcToday = document.getElementById('rc-today');
   const rcWeek7 = document.getElementById('rc-week7');
-  const rcMonth = document.getElementById('rc-month');
   const rcAll   = document.getElementById('rc-all');
   if (rcToday) rcToday.textContent = todayCount;
   if (rcWeek7) rcWeek7.textContent = soonCount;
-  if (rcMonth) rcMonth.textContent = monthCount;
   if (rcAll)   rcAll.textContent   = all.length;
-  // summary 里显示：今天 X 个 · 本周 Y 个 · 本月 Z 个
+  // summary 里显示：今天 X 个 · 本周 Y 个 · 逾期 N 个
   const summary = document.getElementById('reminderSummary');
   if (summary) {
     const parts = [];
     if (todayCount > 0) parts.push(`今天 ${todayCount}`);
     if (soonCount  - todayCount > 0) parts.push(`本周 ${soonCount}`);
-    parts.push(`本月 ${monthCount}`);
     if (lateCount > 0) parts.push(`逾期 ${lateCount}`);
+    if (!parts.length) parts.push('暂无临近纪念日');
     summary.textContent = '📌 ' + parts.join(' · ');
   }
-  return { all, todayCount, soonCount, monthCount, lateCount };
+  return { all, todayCount, soonCount, lateCount };
 }
 
 function switchReminderTab(tab) {
@@ -1571,9 +1600,8 @@ function renderReminderBody() {
   if (!list.length) {
     let empty = '🎉 太棒了！';
     let hint  = '当前筛选范围内没有需要关注的纪念日。';
-    if (_reminderTab === 'today') { empty = '🌞 今天没有纪念日'; hint = '可以切换到「7 天内」或「本月」查看即将到来的纪念日。'; }
-    else if (_reminderTab === 'week7') { empty = '🌸 一周内没有纪念日'; hint = '可以查看「本月」或全部清单。'; }
-    else if (_reminderTab === 'month') { empty = '🍀 本月没有纪念日'; hint = '可以查看全部清单。'; }
+    if (_reminderTab === 'today') { empty = '🌞 今天没有纪念日'; hint = '可以切换到「7 天内」查看即将到来的纪念日。'; }
+    else if (_reminderTab === 'week7') { empty = '🌸 一周内没有纪念日'; hint = '可以查看「全部」清单。'; }
     body.innerHTML = `
       <div class="reminder-empty">
         <span class="empty-icon">${empty.split(' ')[0]}</span>
@@ -1592,14 +1620,12 @@ function renderReminderBody() {
     const chipCls = (() => {
       if (sample.status === 'today') return 'chip-today';
       if (sample.status === 'soon')  return 'chip-week';
-      if (sample.status === 'month') return 'chip-month';
       if (sample.status === 'late')  return 'chip-late';
       return 'chip-other';
     })();
     const chipText = (() => {
       if (sample.status === 'today') return '今天';
       if (sample.status === 'soon')  return '7 天内';
-      if (sample.status === 'month') return '本月';
       if (sample.status === 'late')  return '已逾期';
       return '稍后';
     })();
@@ -1621,7 +1647,6 @@ function renderReminderBody() {
       const cardCls =
         item.status === 'today' ? 'card-today' :
         item.status === 'soon'  ? 'card-week'  :
-        item.status === 'month' ? 'card-month' :
         item.status === 'late'  ? 'card-late'  : '';
       const emoji = petEmojis[(item.cellKey.length + item.petName.length) % petEmojis.length];
       const locSub = [
@@ -1751,7 +1776,7 @@ function renderSearchDropdown() {
   for (let i = 0; i < results.length; i++) {
     const item = results[i];
     const d = item.data;
-    const size = PATTERN[(item.col-1) % PATTERN.length] === 'large' ? '大格子' : '小格子';
+    const size = getColumnType(item.col, PATTERN) === 'large' ? '大格子' : '小格子';
     html +=
       '<div class="search-item" data-key="' + item.key + '">' +
         '<div class="search-item-avatar">🐾</div>' +
@@ -1849,7 +1874,7 @@ function renderGrid() {
     grid.appendChild(label);
 
     for (let c = 1; c <= COLS; c++) {
-      const size = PATTERN[(c-1) % PATTERN.length];
+      const size = getColumnType(c, PATTERN);
       const key = 'r' + r + 'c' + c;
       const d = gridData[key];
       const status = getCellStatus(key);
@@ -1925,14 +1950,14 @@ function renderDetail() {
       <div class="detail-empty">
         <div class="icon">🏠</div>
         <h3>点击左侧格子查看详情</h3>
-        <p id="gridSizeHint">${ROWS}行 × ${COLS}列 · 按「${PATTERN.join('·')}」排列</p>
+        <p id="gridSizeHint">${getPatternHintText(COLS, PATTERN)}</p>
       </div>`;
     return;
   }
   const d = gridData[selectedKey];
   const match = selectedKey.match(/r([0-9]+)c([0-9]+)/);
   const r = match[1], c = match[2];
-  const size = PATTERN[(c-1) % PATTERN.length] === 'large' ? '大格子' : '小格子';
+  const size = getColumnType(c, PATTERN) === 'large' ? '大格子' : '小格子';
 
   if (!d) {
     panel.innerHTML =
@@ -2180,7 +2205,7 @@ function exportData() {
       const d = gridData[key];
       if (d) {
         rows.push([
-          key, r, c, PATTERN[(c-1) % PATTERN.length] === 'large' ? '大' : '小',
+          key, r, c, getColumnType(c, PATTERN) === 'large' ? '大' : '小',
           d.petName || '', d.breed || '', d.owner || '', d.phone || '', d.checkIn || '', d.notes || ''
         ]);
       }
@@ -2463,8 +2488,8 @@ async function saveStoreInfo() {
     const roleName = roleMap[currentStore.my_role || 'owner'] || '员工';
     document.getElementById('storeTag').innerHTML =
       '🏪 ' + name + ' <span class="role-badge ' + (currentStore.my_role || 'owner') + '" style="margin-left:6px;">' + roleName + '</span>';
-    document.getElementById('gridSizeHint').textContent =
-      ROWS + '行 × ' + COLS + '列 · 按「' + PATTERN.join('·') + '」排列';
+    const sz = document.getElementById('gridSizeHint');
+    if (sz) sz.textContent = getPatternHintText(COLS, PATTERN);
     renderInviteBar();
 
     closeStoreModal();
