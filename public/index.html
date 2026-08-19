@@ -363,15 +363,17 @@
   .cell {
     border-radius: 6px; cursor: pointer; transition: all 0.15s ease;
     display: flex; align-items: center; justify-content: center;
-    font-size: 10px; position: relative; border: 2px solid transparent; user-select: none;
+    position: relative; border: 2px solid transparent; user-select: none;
+    padding: 4px;
+    overflow: hidden;
   }
   .cell:hover { transform: scale(1.08); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .cell.small { aspect-ratio: 1; }
   .cell.large { aspect-ratio: 2 / 1; }
   .cell.empty { background: #e5e7eb; border: 2px dashed #d1d5db; color: #9ca3af; }
-  .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; font-weight: 600; }
-  .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; font-weight: 700; animation: pulse 2s infinite; }
-  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; font-weight: 700; animation: pulse 1.2s infinite; }
+  .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; }
+  .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; animation: pulse 2s infinite; }
+  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; animation: pulse 1.2s infinite; }
   .cell.selected { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
   .cell.filtered-out { opacity: 0.15; pointer-events: none; }
   .cell.saving::after {
@@ -381,12 +383,36 @@
   }
   @keyframes saving { 0%,100% { opacity:0.3 } 50% { opacity:0.8 } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
-  .cell-badge {
-    position: absolute; top: -4px; right: -4px; width: 14px; height: 14px;
-    border-radius: 50%; background: #ef4444; color: white; font-size: 9px;
-    display: flex; align-items: center; justify-content: center; font-weight: 700;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+
+  /* 格子里的名字：居中显示，最多 2 行省略，大小格字号区分 + 字重统一 700 */
+  .cell-name {
+    width: 100%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    word-break: break-all;
+    text-align: center;
+    line-height: 1.2;
+    font-weight: 700;
   }
+  .cell.small .cell-name { font-size: calc(var(--cell-fs-small, 11) * 1px); }
+  .cell.large .cell-name { font-size: calc(var(--cell-fs-large, 13) * 1px); -webkit-line-clamp: 1; line-clamp: 1; }
+
+  /* 右上角状态 / 纪念日数量徽标 */
+  .cell-badge {
+    position: absolute; top: -4px; right: -4px;
+    min-width: 14px; height: 14px; padding: 0 3px;
+    border-radius: 999px;
+    background: #ef4444; color: white; font-size: 9px;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    white-space: nowrap;
+  }
+  .cell-badge.warn   { background: #eab308; color: #fff; }
+  .cell-badge.danger { background: #ef4444; color: #fff; }
 
   .detail-panel {
     width: 380px; background: white; border-left: 1px solid #e5e7eb;
@@ -1898,12 +1924,29 @@ function renderGrid() {
       if (!matchesSearch || !matchesFilter) cell.classList.add('filtered-out');
 
       if (d) {
-        if (nearest && nearest.days <= 7) {
-          cell.innerHTML = '<span style="font-size:9px;font-weight:700">' + (nearest.days === 0 ? '今天' : nearest.days + '天') + '</span>';
-        } else {
-          cell.innerHTML = '<span style="font-size:9px">' + (d.petName || '').substring(0, 2) + '</span>';
-        }
-        if (d.memorials && d.memorials.length > 0) {
+        // 主内容：显示宠物名字全称（不再显示临近天数/不再截断2字）
+        const petName = d.petName && String(d.petName).trim() ? String(d.petName).trim() : '（未命名）';
+        cell.innerHTML = '<span class="cell-name">' + escapeHTML(petName) + '</span>';
+
+        // 右上角徽章：
+        //   - danger 状态（纪念日当天）：显示「今天」文字徽章（danger 红）
+        //   - warning 状态（临近≤7天）：显示「N天」文字徽章（warn 黄）
+        //   - 否则只要有纪念日（>0）：显示数量徽章
+        if (nearest) {
+          const badge = document.createElement('span');
+          badge.className = 'cell-badge';
+          if (nearest.days === 0) {
+            badge.classList.add('danger');
+            badge.textContent = '今天';
+            badge.style.minWidth = '26px';
+          } else if (nearest.days <= 7) {
+            badge.classList.add('warn');
+            badge.textContent = nearest.days + '天';
+          } else if (d.memorials && d.memorials.length > 0) {
+            badge.textContent = d.memorials.length;
+          }
+          if (badge.textContent) cell.appendChild(badge);
+        } else if (d.memorials && d.memorials.length > 0) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.textContent = d.memorials.length;
