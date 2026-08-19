@@ -1233,14 +1233,38 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSearchDropdown();
 });
 
+/* ---------- 全局兜底：屏蔽 IDE 注入 / 浏览器扩展 / 翻译脚本 的报错（如 content_main.js handleKeyDown）----------
+ * 这类脚本会注入全局 keydown/input 监听，当 e.target 不是 <input>（比如是我们的格子 <div>）
+ * 它们会尝试读 e.target.value.toLowerCase() 而 value=undefined → 报错。
+ * 这类错误 100% 不影响业务功能，所以静默忽略（仅在 console.warn 里给开发者看一眼）。
+ */
+window.addEventListener('error', ev => {
+  const msg  = (ev.message || '').toString();
+  const file = (ev.filename || '').toString();
+  // 忽略 IDE/浏览器扩展 注入的 content_*.js / injected / 第三方脚本 读 .toLowerCase() / .toUpperCase() / .trim() 类错误
+  if (
+    /content_|injected|chrome-extension|moz-extension|ms-browser-extension/i.test(file)
+    || /(cannot read properties of undefined \(reading '(tolowercase|touppercase|trim)'\))/i.test(msg)
+  ) {
+    console.warn('[忽略非业务错误] ' + msg + '  @ ' + file + ':' + ev.lineno);
+    ev.preventDefault();
+    ev.stopPropagation && ev.stopPropagation();
+    return false;
+  }
+  return true;
+}, true);
+
 /* ==========================================================
  *  渲染：格子 & 统计 & 详情
  * ========================================================== */
 function renderGrid() {
   const grid = document.getElementById('grid');
+  if (!grid) return;
   grid.innerHTML = '';
-  const filter = document.getElementById('filterSelect').value;
-  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  const filterEl = document.getElementById('filterSelect');
+  const searchEl = document.getElementById('searchInput');
+  const filter = filterEl ? filterEl.value : 'all';
+  const search = searchEl ? searchEl.value.trim().toLowerCase() : '';
 
   const corner = document.createElement('div');
   grid.appendChild(corner);
