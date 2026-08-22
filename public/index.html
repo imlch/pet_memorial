@@ -448,22 +448,25 @@
     box-shadow: 0 20px 60px rgba(0,0,0,0.3); transform: translateY(20px); transition: transform 0.2s;
   }
   .modal-overlay.active .modal { transform: translateY(0); }
-  .modal-header { padding: 20px 24px 0; display: flex; justify-content: space-between; align-items: center; }
-  .modal-header h2 { font-size: 18px; font-weight: 700; }
+  .modal-header { padding: 22px 32px 0; display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h2 { font-size: 18px; font-weight: 700; color: #111827; }
   .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: #f3f4f6; cursor: pointer; font-size: 18px; color: #6b7280; display: flex; align-items: center; justify-content: center; }
   .modal-close:hover { background: #e5e7eb; }
-  .modal-body { padding: 20px 24px; }
+  .modal-body { padding: 28px 32px; }
   .form-group { margin-bottom: 16px; }
-  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; letter-spacing: 0.2px; }
   .form-group input, .form-group textarea, .form-group select {
     width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
-    font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s;
+    font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    background: #fff;
   }
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
   .form-group input:disabled { background: #f9fafb; color: #9ca3af; cursor: not-allowed; }
   .form-group textarea { resize: vertical; min-height: 80px; }
-  .form-row { display: flex; gap: 12px; }
+  .form-row { display: flex; gap: 16px; flex-wrap: wrap; }
   .form-row .form-group { flex: 1; }
+  .form-row-triple { display: flex; gap: 16px; flex-wrap: nowrap; margin-bottom: 4px; }
+  .form-row-triple > .form-group { flex: 1 1 0; min-width: 150px; }
 
   .memorial-list { display: flex; flex-direction: column; gap: 8px; }
   .memorial-form { display: flex; gap: 8px; align-items: center; background: #f9fafb; padding: 10px; border-radius: 8px; flex-wrap: wrap; }
@@ -475,9 +478,18 @@
   .memorial-chip { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #e0e7ff; border-radius: 8px; font-size: 13px; }
   .memorial-chip .remove { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px; padding: 0 4px; }
 
-  .modal-footer { padding: 0 24px 20px; display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-footer { padding: 0 32px 22px; display: flex; gap: 10px; justify-content: flex-end; }
   .modal-footer .btn { padding: 10px 20px; }
   .modal-footer .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (max-width: 640px) {
+    .modal { width: 94%; }
+    .modal-header { padding: 20px 18px 0; }
+    .modal-body { padding: 20px 18px; }
+    .modal-footer { padding: 0 18px 20px; }
+    .form-row, .form-row-triple { flex-direction: column; gap: 0; flex-wrap: nowrap; }
+    .form-row-triple > .form-group { min-width: 0; }
+  }
 
   .toast {
     position: fixed; bottom: 24px; left: 50%;
@@ -753,7 +765,8 @@
       <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
+      <!-- 第一行：宠物名字 · 品种 · 家长负责人（三列横向，整齐排列） -->
+      <div class="form-row form-row-triple">
         <div class="form-group">
           <label>宠物名字 *</label>
           <input type="text" id="f_petName" placeholder="如：豆豆">
@@ -762,8 +775,6 @@
           <label>品种</label>
           <input type="text" id="f_breed" placeholder="如：金毛">
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
           <label>家长负责人</label>
           <select id="f_ownerResponsible">
@@ -775,7 +786,6 @@
             <option value="群聊">群聊</option>
           </select>
         </div>
-      </div>
       </div>
       <div class="form-group">
         <label>入住日期</label>
@@ -795,7 +805,7 @@
           <button class="btn btn-success" onclick="addMemorial()">+ 添加</button>
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" style="margin-bottom:0;">
         <label>备注</label>
         <textarea id="f_notes" placeholder="写下关于这个宝贝的温馨回忆..."></textarea>
       </div>
