@@ -979,28 +979,74 @@ function friendlySupabaseErr(err) {
 }
 function showToast(msg, type) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (type ? ' ' + type : '');
-  setTimeout(() => { t.className = 'toast' + (type ? ' ' + type : ''); }, 2600);
+  if (t) {
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    setTimeout(() => { if (t) t.className = 'toast' + (type ? ' ' + type : ''); }, 2600);
+  }
 }
 function setLoading(text) {
-  document.getElementById('loadingText').textContent = text || '加载中...';
+  const el = document.getElementById('loadingText');
+  if (el) el.textContent = text || '加载中...';
 }
 function hideLoading() {
-  document.getElementById('loadingScreen').classList.add('hidden');
+  const el = document.getElementById('loadingScreen');
+  if (el) el.classList.add('hidden');
 }
 function showAuth(subText) {
-  document.getElementById('authOverlay').classList.remove('hidden');
-  if (subText) document.getElementById('authSub').textContent = subText;
+  const el = document.getElementById('authOverlay');
+  if (el) el.classList.remove('hidden');
+  if (subText) { const s = document.getElementById('authSub'); if (s) s.textContent = subText; }
 }
 function hideAuth() {
-  document.getElementById('authOverlay').classList.add('hidden');
+  const el = document.getElementById('authOverlay');
+  if (el) el.classList.add('hidden');
 }
 function parsePattern(cfg) {
   try {
     const arr = JSON.parse(cfg || '["small","small","large"]');
     return Array.isArray(arr) && arr.length ? arr : ['small','small','large'];
   } catch (e) { return ['small','small','large']; }
+}
+
+/**
+ * 通用 Promise 超时熔断：防止 Supabase 网络 hanging 导致前端卡死
+ * @param {Promise} promise  要执行的 Promise
+ * @param {number}  ms       超时毫秒数，默认 15000
+ * @param {string}  label    用于错误提示的标签
+ */
+function withTimeout(promise, ms, label) {
+  const timeoutMs = ms || 15000;
+  const tag = label || '请求';
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`「${tag}」超时：${Math.round(timeoutMs/1000)} 秒未收到云端响应，请检查网络后重试`));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+  });
+}
+
+/**
+ * 友好地把 Supabase 各种错误对象转成用户可读文案 + 原始 debug 信息
+ */
+function friendlySupabaseErr(err) {
+  if (!err) return { user: '未知错误', raw: '' };
+  if (typeof err === 'string') return { user: err, raw: err };
+  const code = err.code || '';
+  const msg  = err.message || '';
+  let user = msg || String(err);
+  if (code === 'Failed to fetch' || /Failed to fetch|NetworkError|CORS|network/i.test(msg))
+    user = '无法连接云端，请检查网络或稍后重试';
+  else if (code === '42P17' || /infinite recursion/i.test(msg))
+    user = '数据库权限策略错误，请先运行 FIX_04 修复脚本';
+  else if (/JWT|invalid|token|auth/i.test(msg))
+    user = '登录已过期，请退出后重新登录';
+  else if (code && /[0-9A-Z]{5}/.test(code))
+    user = user + ` (${code})`;
+  return { user: user.slice(0, 120), raw: msg || JSON.stringify(err).slice(0, 400) };
 }
 
 /**
@@ -1213,18 +1259,31 @@ async function bootstrapStore() {
     // 2.5 渲染邀请码展示条（新增）
     renderInviteBar();
 
-    // 3. 拉取格子数据（RPC 一次性返回）
-    setLoading('正在同步格子数据...');
-    await loadDataFromCloud();
+    // 3. 拉取格子数据（RPC 一次性返回）—— 无论成功失败 hideLoading 必须进 finally 保证不卡遮罩
+    let loaded = false;
+    try {
+      setLoading('正在同步格子数据...');
+      loaded = await loadDataFromCloud();
+    } catch (eSync) {
+      console.error('[bootstrapStore] sync exception:', eSync);
+      showToast('同步异常，尝试使用缓存数据：' + friendlySupabaseErr(eSync).user, 'error');
+    }
 
-    // 4. 渲染
-    renderGrid();
-    if (selectedKey) renderDetail();
+    // 4. 渲染（即使 loadDataFromCloud throw 也要渲染，只要 gridData 有内容）
+    try {
+      renderGrid();
+      if (selectedKey) renderDetail();
+    } catch (eRender) {
+      console.error('[bootstrapStore] render exception:', eRender);
+    }
     hideLoading();
-    showToast('数据同步完成', 'success');
-    updateReminderBadge();  // ★ 徽标自动更新（今日/本周纪念日计数）
+    if (loaded) {
+      showToast('数据同步完成', 'success');
+      try { updateReminderBadge(); } catch (eBadge) { console.error(eBadge); }
+    }
   } finally {
-    // 无论成功/异常/return，最后都解锁 _bootstrapLoading
+    // 无论成功/异常/return，最后都解锁 _bootstrapLoading + 确保 hideLoading() 被调一次
+    try { hideLoading(); } catch (_) {}
     setTimeout(() => { _bootstrapLoading = false; }, 300);
   }
 }
@@ -1360,46 +1419,95 @@ async function logout() {
  *  数据层：云端读写（替代原 localStorage）
  * ========================================================== */
 async function loadDataFromCloud() {
-  const { data, error } = await supabase.rpc('get_store_grid');
-  if (error) { console.error(error); showToast('数据加载失败：' + error.message, 'error'); return false; }
-  const payload = data || { cells: [] };
-  const cells = payload.cells || [];
-  gridData = {};
-  cellDbIds = {};
-  cells.forEach(c => {
-    const key = c.cell_key;
-    cellDbIds[key] = c.cell_key;  // 占位，cells 表用 (store_id, cell_key) 做 upsert
-    gridData[key] = {
-      petName: c.pet_name,
-      breed: c.breed,
-      owner_responsible: c.owner_responsible || c.owner_name || '',  // 兼容老数据的 owner_name
-      checkIn: c.check_in,
-      notes: c.notes,
-      memorials: (c.memorials || []).map(m => ({
-        id: m.id,
-        label: m.label,
-        date: m.date,
-        repeat: m.repeat
-      }))
-    };
-  });
-  return true;
+  try {
+    const res = await withTimeout(
+      supabase.rpc('get_store_grid'),
+      20000,
+      '拉取格子数据'
+    );
+    const { data, error } = res || { data: null, error: new Error('云端无响应') };
+    if (error) {
+      const fe = friendlySupabaseErr(error);
+      console.error('[loadDataFromCloud] RPC error:', fe.raw, error);
+      showToast('数据加载失败：' + fe.user, 'error');
+      return false;
+    }
+    const payload = data || { cells: [] };
+    const cells = Array.isArray(payload.cells) ? payload.cells : [];
+
+    // ⚠️ 安全兜底：如果 RPC 返回了 0 条格子，但本地 gridData 之前有数据 → 二次确认，
+    //    防止因 RLS/权限错误把用户辛苦录入的数据误清空
+    const localCount = Object.keys(gridData || {}).filter(k => gridData[k] && gridData[k].petName).length;
+    if (cells.length === 0 && localCount > 0) {
+      const sure = confirm(
+        `⚠️ 云端返回了 0 条寄存数据，而本地还有 ${localCount} 条。\n` +
+        `这通常意味着「权限配置出错」（如 get_store_grid RPC 没授权、或 RLS 策略为空）。\n\n` +
+        `是否仍要清空本地数据？\n\n（点「取消」保留本地数据，点「确定」用空数据覆盖）`
+      );
+      if (!sure) {
+        showToast('已保留本地数据，建议联系管理员检查数据库权限', 'error');
+        return false;
+      }
+    }
+
+    gridData = {};
+    cellDbIds = {};
+    cells.forEach(c => {
+      const key = c.cell_key;
+      if (!key) return;
+      cellDbIds[key] = key;
+      gridData[key] = {
+        petName: c.pet_name || '',
+        breed: c.breed || '',
+        owner_responsible: c.owner_responsible || c.owner_name || '',  // 兼容老列 + 新列
+        checkIn: c.check_in || '',
+        notes: c.notes || '',
+        memorials: (Array.isArray(c.memorials) ? c.memorials : []).map(m => ({
+          id: m && m.id ? m.id : null,
+          label: (m && m.label) || '',
+          date: (m && m.date) || '',
+          repeat: (m && m.repeat) || '每年'
+        }))
+      };
+    });
+    return true;
+  } catch (e) {
+    const fe = friendlySupabaseErr(e);
+    console.error('[loadDataFromCloud] caught exception:', fe.raw, e);
+    showToast('同步失败：' + fe.user, 'error');
+    return false;
+  }
 }
 
 async function manualSync() {
   const btn = document.getElementById('syncBtn');
+  if (!btn || btn.disabled) return;                       // 防连点
   const origText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '⏳ 同步中';
-  const ok = await loadDataFromCloud();
-  if (ok) {
-    renderGrid();
-    if (selectedKey) renderDetail();
-    updateReminderBadge();  // ★ 手动同步也更新徽标
-    showToast('已同步最新云端数据', 'success');
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 同步中';
+    const ok = await loadDataFromCloud();
+    if (ok) {
+      renderGrid();
+      if (selectedKey) {
+        try { renderDetail(); } catch (e1) { console.error(e1); }
+      }
+      try { updateReminderBadge(); } catch (e2) { console.error(e2); }
+      showToast('已同步最新云端数据', 'success');
+    }
+  } catch (e) {
+    const fe = friendlySupabaseErr(e);
+    console.error('[manualSync] unexpected exception:', fe.raw, e);
+    showToast('同步失败：' + fe.user, 'error');
+  } finally {
+    // ★ 最关键的兜底：无论成功/异常/超时，按钮一定会恢复可点击
+    if (btn) {
+      btn.disabled = false;
+      // 做一个 DOM guard：如果页面已经重建了按钮，用 id 重新拿
+      const realBtn = document.getElementById('syncBtn') || btn;
+      realBtn.innerHTML = '🔄 同步';
+    }
   }
-  btn.disabled = false;
-  btn.innerHTML = origText;
 }
 
 /* ==========================================================
@@ -2119,24 +2227,35 @@ async function saveData() {
       notes: document.getElementById('f_notes').value.trim()
     };
 
-    const { error: cellErr } = await supabase
-      .from('cells')
-      .upsert(cellPayload, { onConflict: 'store_id,cell_key' });
+    const { error: cellErr } = await withTimeout(
+      supabase
+        .from('cells')
+        .upsert(cellPayload, { onConflict: 'store_id,cell_key' }),
+      15000,
+      '保存格子数据'
+    );
     if (cellErr) throw cellErr;
 
     // 2. 重新拉 cell id，用于纪念日关联
-    const { data: cellRow, error: cellIdErr } = await supabase
-      .from('cells')
-      .select('id')
-      .eq('store_id', currentStore.store_id)
-      .eq('cell_key', selectedKey)
-      .single();
-    if (cellIdErr || !cellRow) throw new Error('无法获取格子ID');
+    const { data: cellRow, error: cellIdErr } = await withTimeout(
+      supabase
+        .from('cells')
+        .select('id')
+        .eq('store_id', currentStore.store_id)
+        .eq('cell_key', selectedKey)
+        .single(),
+      10000,
+      '读取格子ID'
+    );
+    if (cellIdErr || !cellRow) throw new Error('无法获取格子ID：' + (cellIdErr ? friendlySupabaseErr(cellIdErr).user : '返回为空'));
     const cellId = cellRow.id;
 
     // 3. 纪念日同步策略：先删后插（简单可靠，避免复杂 diff）
-    //    原有带 id 的保留对比逻辑：直接 DELETE 所有旧的，再 INSERT tempMemorials
-    await supabase.from('memorials').delete().eq('cell_id', cellId);
+    await withTimeout(
+      supabase.from('memorials').delete().eq('cell_id', cellId),
+      10000,
+      '清理旧纪念日'
+    );
 
     if (tempMemorials.length) {
       const memorialPayload = tempMemorials.map(m => ({
@@ -2145,7 +2264,11 @@ async function saveData() {
         memorial_date: m.date,
         repeat_type: m.repeat || '每年'
       }));
-      const { error: mErr } = await supabase.from('memorials').insert(memorialPayload);
+      const { error: mErr } = await withTimeout(
+        supabase.from('memorials').insert(memorialPayload),
+        15000,
+        '保存纪念日'
+      );
       if (mErr) throw mErr;
     }
 
@@ -2182,11 +2305,15 @@ async function deleteCurrent() {
 
   isSaving = true;
   try {
-    const { error } = await supabase
-      .from('cells')
-      .delete()
-      .eq('store_id', currentStore.store_id)
-      .eq('cell_key', selectedKey);
+    const { error } = await withTimeout(
+      supabase
+        .from('cells')
+        .delete()
+        .eq('store_id', currentStore.store_id)
+        .eq('cell_key', selectedKey),
+      12000,
+      '删除格子数据'
+    );
     if (error) throw error;
 
     delete gridData[selectedKey];
@@ -2194,10 +2321,10 @@ async function deleteCurrent() {
     renderGrid();
     renderDetail();
     showToast('已删除', 'success');
-    updateReminderBadge();   // ★ 删除同步后更新徽标
+    try { updateReminderBadge(); } catch (eBadge) { console.error(eBadge); }
   } catch (err) {
-    console.error(err);
-    showToast('删除失败：' + (err.message || '未知错误'), 'error');
+    console.error('[deleteCurrent] error:', err);
+    showToast('删除失败：' + friendlySupabaseErr(err).user, 'error');
   } finally {
     isSaving = false;
   }
@@ -2328,7 +2455,11 @@ async function handleImport(e) {
     try {
       if (!isCSV) {
         // JSON 模式：全量覆盖 → 先删除当前门店所有 cells（RLS 只允许删自己的）
-        await supabase.from('cells').delete().eq('store_id', currentStore.store_id);
+        await withTimeout(
+          supabase.from('cells').delete().eq('store_id', currentStore.store_id),
+          30000,
+          '清空旧数据'
+        );
       }
 
       // 分批写入，避免 URL 过长（Supabase REST 有 body 限制，一般 100 条/批足够）
@@ -2352,9 +2483,13 @@ async function handleImport(e) {
           };
         }).filter(c => c.row_num > 0 && c.col_num > 0);
 
-        const { error: batchErr } = await supabase
-          .from('cells')
-          .upsert(cellBatch, { onConflict: 'store_id,cell_key' });
+        const { error: batchErr } = await withTimeout(
+          supabase
+            .from('cells')
+            .upsert(cellBatch, { onConflict: 'store_id,cell_key' }),
+          25000,
+          `导入第 ${Math.floor(i/BATCH)+1} 批(${cellBatch.length}条)`
+        );
         if (batchErr) throw batchErr;
         inserted += cellBatch.length;
       }
@@ -2363,11 +2498,11 @@ async function handleImport(e) {
       await loadDataFromCloud();
       renderGrid();
       if (selectedKey) renderDetail();
-      updateReminderBadge();   // ★ 导入成功后更新徽标
+      try { updateReminderBadge(); } catch (eBadge) { console.error(eBadge); }
       showToast('导入成功：' + inserted + ' 条', 'success');
     } catch (err) {
-      console.error(err);
-      showToast('导入失败：' + (err.message || '未知错误'), 'error');
+      console.error('[handleImport] error:', err);
+      showToast('导入失败：' + friendlySupabaseErr(err).user, 'error');
     } finally {
       isSaving = false;
     }
