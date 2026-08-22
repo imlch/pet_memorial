@@ -765,13 +765,17 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>家长姓名</label>
-          <input type="text" id="f_owner" placeholder="如：张女士">
+          <label>家长负责人</label>
+          <select id="f_ownerResponsible">
+            <option value="">请选择</option>
+            <option value="老李">老李</option>
+            <option value="张俊生">张俊生</option>
+            <option value="迪姐">迪姐</option>
+            <option value="客服">客服</option>
+            <option value="群聊">群聊</option>
+          </select>
         </div>
-        <div class="form-group">
-          <label>联系方式</label>
-          <input type="text" id="f_phone" placeholder="如：138****8888">
-        </div>
+      </div>
       </div>
       <div class="form-group">
         <label>入住日期</label>
@@ -1358,8 +1362,7 @@ async function loadDataFromCloud() {
     gridData[key] = {
       petName: c.pet_name,
       breed: c.breed,
-      owner: c.owner_name,
-      phone: c.phone,
+      owner_responsible: c.owner_responsible || c.owner_name || '',  // 兼容老数据的 owner_name
       checkIn: c.check_in,
       notes: c.notes,
       memorials: (c.memorials || []).map(m => ({
@@ -1471,8 +1474,7 @@ function scanMemorials() {
         row, col,
         petName:    d.petName || '（未命名）',
         breed:      d.breed || '',
-        owner:      d.owner || '',
-        phone:      d.phone || '',
+        owner_responsible: d.owner_responsible || '',
         memorialId: memorial.id   || null,
         label:      memorial.label || '纪念日',
         originalDate: memorial.date || '',
@@ -1642,9 +1644,8 @@ function renderReminderBody() {
         item.status === 'late'  ? 'card-late'  : '';
       const emoji = petEmojis[(item.cellKey.length + item.petName.length) % petEmojis.length];
       const locSub = [
-        item.breed ? `🐾 ${item.breed}` : '',
-        item.owner ? `👤 ${item.owner}` : '',
-        item.phone ? `📱 ${item.phone}` : ''
+        item.breed              ? `🐾 ${item.breed}`              : '',
+        item.owner_responsible  ? `👤 ${item.owner_responsible}`  : ''
       ].filter(Boolean).join('  ·  ');
 
       html += `
@@ -1745,7 +1746,7 @@ function getSearchResults(query) {
       const key = 'r' + r + 'c' + c;
       const d = gridData[key];
       if (!d) continue;
-      const hay = (d.petName || '') + ' ' + (d.breed || '') + ' ' + (d.owner || '');
+      const hay = (d.petName || '') + ' ' + (d.breed || '') + ' ' + (d.owner_responsible || '');
       if (hay.toLowerCase().includes(q)) {
         results.push({ key: key, row: r, col: c, data: d });
       }
@@ -1774,7 +1775,7 @@ function renderSearchDropdown() {
         '<div class="search-item-avatar">🐾</div>' +
         '<div class="search-item-info">' +
           '<div class="search-item-title">' + (d.petName || '未命名') + ' <span style="color:#6b7280;font-weight:400">' + (d.breed || '') + '</span></div>' +
-          '<div class="search-item-sub">家长：' + (d.owner || '-') + ' · ' + size + '</div>' +
+          '<div class="search-item-sub">家长负责人：' + (d.owner_responsible || '-') + ' · ' + size + '</div>' +
         '</div>' +
         '<div class="search-item-pos">' + item.row + '行' + item.col + '列</div>' +
       '</div>';
@@ -1878,7 +1879,7 @@ function renderGrid() {
 
       let matchesSearch = true;
       if (search && d) {
-        const hay = (d.petName || '') + (d.breed || '') + (d.owner || '');
+        const hay = (d.petName || '') + (d.breed || '') + (d.owner_responsible || '');
         matchesSearch = hay.toLowerCase().includes(search);
       }
       let matchesFilter = true;
@@ -2010,8 +2011,7 @@ function renderDetail() {
       '</div>' +
       '<div class="detail-section">' +
         '<div class="detail-section-title">基本信息</div>' +
-        '<div class="detail-row"><label>家长</label><span>' + (d.owner || '-') + '</span></div>' +
-        '<div class="detail-row"><label>联系方式</label><span>' + (d.phone || '-') + '</span></div>' +
+        '<div class="detail-row"><label>家长负责人</label><span>' + (d.owner_responsible || '-') + '</span></div>' +
         '<div class="detail-row"><label>入住日期</label><span>' + (d.checkIn || '-') + '</span></div>' +
       '</div>' +
       '<div class="detail-section">' +
@@ -2036,8 +2036,7 @@ function openModal() {
   document.getElementById('modalTitle').textContent = d ? '编辑寄存信息' : '添加寄存信息';
   document.getElementById('f_petName').value = d ? d.petName || '' : '';
   document.getElementById('f_breed').value = d ? d.breed || '' : '';
-  document.getElementById('f_owner').value = d ? d.owner || '' : '';
-  document.getElementById('f_phone').value = d ? d.phone || '' : '';
+  document.getElementById('f_ownerResponsible').value = d ? d.owner_responsible || '' : '';
   document.getElementById('f_checkIn').value = d ? d.checkIn || '' : '';
   document.getElementById('f_notes').value = d ? d.notes || '' : '';
   tempMemorials = d && d.memorials ? JSON.parse(JSON.stringify(d.memorials)) : [];
@@ -2105,8 +2104,7 @@ async function saveData() {
       col_num: col_num,
       pet_name: petName,
       breed: document.getElementById('f_breed').value.trim(),
-      owner_name: document.getElementById('f_owner').value.trim(),
-      phone: document.getElementById('f_phone').value.trim(),
+      owner_responsible: document.getElementById('f_ownerResponsible').value.trim(),
       check_in: document.getElementById('f_checkIn').value || null,
       notes: document.getElementById('f_notes').value.trim()
     };
@@ -2145,8 +2143,7 @@ async function saveData() {
     gridData[selectedKey] = {
       petName: cellPayload.pet_name,
       breed: cellPayload.breed,
-      owner: cellPayload.owner_name,
-      phone: cellPayload.phone,
+      owner_responsible: cellPayload.owner_responsible,
       checkIn: cellPayload.check_in,
       notes: cellPayload.notes,
       memorials: tempMemorials.map(m => ({ id: null, label: m.label, date: m.date, repeat: m.repeat }))
@@ -2200,7 +2197,7 @@ async function deleteCurrent() {
  *  导出 / 导入
  * ========================================================== */
 function exportData() {
-  const rows = [['格子编号','行','列','格子大小','宠物名','品种','家长','联系方式','入住日期','备注']];
+  const rows = [['格子编号','行','列','格子大小','宠物名','品种','家长负责人','入住日期','备注']];
   for (let r = 1; r <= ROWS; r++) {
     for (let c = 1; c <= COLS; c++) {
       const key = 'r' + r + 'c' + c;
@@ -2208,7 +2205,7 @@ function exportData() {
       if (d) {
         rows.push([
           key, r, c, getColSize(c) === 'large' ? '大' : '小',
-          d.petName || '', d.breed || '', d.owner || '', d.phone || '', d.checkIn || '', d.notes || ''
+          d.petName || '', d.breed || '', d.owner_responsible || '', d.checkIn || '', d.notes || ''
         ]);
       }
     }
@@ -2233,24 +2230,40 @@ function parseCSV(text) {
   text = text.replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return null;
+  // 判断新旧格式表头：老格式 10 列（有家长+联系方式），新格式 9 列（仅家长负责人）
+  const headerLine = lines[0] || '';
+  const headerRow  = parseCSVLine(headerLine);
+  const OLD_FORMAT_COLS = 10;  // 老表头第6列=家长, 第7列=联系方式, 第8列=入住日期, 第9列=备注
+  const NEW_FORMAT_COLS = 9;   // 新表头第6列=家长负责人, 第7列=入住日期, 第8列=备注
+  const isOld = headerRow && headerRow.length >= OLD_FORMAT_COLS &&
+                (headerRow[6] || '').includes('家长') &&
+                (headerRow[7] || '').includes('联系方式');
+  const minCols = isOld ? OLD_FORMAT_COLS : NEW_FORMAT_COLS;
+  const col_owner     = 6;
+  const col_phone     = 7;     // 老格式才有
+  const col_checkIn   = isOld ? 8 : 7;
+  const col_notes     = isOld ? 9 : 8;
   const result = {};
   for (let i = 1; i < lines.length; i++) {
     const row = parseCSVLine(lines[i]);
-    if (!row || row.length < 10) continue;
+    if (!row || row.length < minCols) continue;
     const key = row[0].trim();
     const r = parseInt(row[1]), c = parseInt(row[2]);
     if (isNaN(r) || isNaN(c) || r < 1 || r > 999 || c < 1 || c > 999) continue;
     const petName = row[4].trim();
     if (!petName) continue;
+    // 老格式：owner+phone 合并 → owner_responsible 优先用 owner，空的话用 phone
+    const ownerResponsible = isOld
+      ? ((row[col_owner] || '').trim() || (row[col_phone] || '').trim())
+      : (row[col_owner] || '').trim();
     result[key] = {
       row_num: r,
       col_num: c,
       petName: petName,
       breed: row[5].trim(),
-      owner: row[6].trim(),
-      phone: row[7].trim(),
-      checkIn: row[8].trim(),
-      notes: row[9].trim(),
+      owner_responsible: ownerResponsible,
+      checkIn: (row[col_checkIn] || '').trim(),
+      notes:   (row[col_notes]   || '').trim(),
       memorials: []
     };
   }
@@ -2323,8 +2336,7 @@ async function handleImport(e) {
             col_num: d.col_num || (parseInt(k.match(/c(\d+)/)?.[1]) || 0),
             pet_name: d.petName,
             breed: d.breed || '',
-            owner_name: d.owner || '',
-            phone: d.phone || '',
+            owner_responsible: d.owner_responsible || d.owner || '',  // 兼容 JSON 旧字段
             check_in: d.checkIn || null,
             notes: d.notes || ''
           };
