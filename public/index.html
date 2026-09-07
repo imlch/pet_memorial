@@ -1051,18 +1051,41 @@ function withTimeout(promise, ms, label) {
 function friendlySupabaseErr(err) {
   if (!err) return { user: '未知错误', raw: '' };
   if (typeof err === 'string') return { user: err, raw: err };
-  const code = err.code || '';
+  const code = (err.code || '').toString();
   const msg  = err.message || '';
+  const det  = err.details || '';
+  const hint = err.hint || '';
   let user = msg || String(err);
-  if (code === 'Failed to fetch' || /Failed to fetch|NetworkError|CORS|network/i.test(msg))
-    user = '无法连接云端，请检查网络或稍后重试';
+
+  // ---- PostgreSQL 错误码专项：直接给出原因 + 修复动作 ----
+  if (code === '42703' || /column .* does not exist|undefined column/i.test(msg + det + hint)) {
+    const colMatch = (msg + det + hint).match(/column[ "]+([a-z_]+)[ "]+/i);
+    const colName  = colMatch ? colMatch[1] : '';
+    const tip =
+      colName === 'farewell_date' || colName === 'storage_period'
+        ? '请先在 Supabase SQL Editor 按顺序执行：① 004_add_farewell_and_storage_period.sql ② FIX_05_sync_perf_and_staff_bugs.sql'
+        : '数据库缺少列，请先跑对应 migration（在项目 supabase/migrations 目录下）';
+    user = '数据库还没有「' + (colName || '对应') + '」列。' + tip;
+  }
+  else if (code === '42501' || /permission denied|must be owner|insufficient privilege/i.test(msg + hint))
+    user = '数据库权限不足：请先运行 FIX_01_register_error_all.sql 重新授权，再重新执行对应 migration';
+  else if (code === '40001' || /deadlock detected|could not obtain lock/i.test(msg + det))
+    user = '数据库并发死锁，请稍等几秒后重试；若反复出现请联系管理员清理长事务';
+  else if (code === '23505' || /duplicate key value violates unique constraint/i.test(msg + det))
+    user = '数据重复：同一条数据已存在，可直接修改现有内容';
   else if (code === '42P17' || /infinite recursion/i.test(msg))
-    user = '数据库权限策略错误，请先运行 FIX_04 修复脚本';
+    user = 'RLS 策略出现环，请先运行 FIX_04_rls_infinite_recursion.sql';
+  else if (code === '42883' || /function .* does not exist/i.test(msg))
+    user = '数据库缺少函数（常见缺 handle_updated_at），请先运行 FIX_01_register_error_all.sql';
+  else if (code === 'Failed to fetch' || /Failed to fetch|NetworkError|CORS|network/i.test(msg))
+    user = '无法连接云端，请检查网络或稍后重试（如反复出现可在 Supabase Dashboard → Bans 检查是否被临时限流）';
   else if (/JWT|invalid|token|auth/i.test(msg))
     user = '登录已过期，请退出后重新登录';
   else if (code && /[0-9A-Z]{5}/.test(code))
     user = user + ` (${code})`;
-  return { user: user.slice(0, 120), raw: msg || JSON.stringify(err).slice(0, 400) };
+
+  const rawAll = [msg, det, hint].filter(Boolean).join(' | ').slice(0, 500) || JSON.stringify(err).slice(0, 500);
+  return { user: user.slice(0, 160), raw: rawAll };
 }
 
 /**
@@ -1104,7 +1127,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true }
+      auth: { persistSession: true, autoRefreshToken: true },
+      // 全局超时兜底：避免 Supabase 冷启动/网络抖动导致前端无限挂起；db 单独 timeout 覆盖 REST 调用
+      db: { schema: 'public', timeout: 45000 },
+      global: { timeout: 45000 }
     });
   } catch (err) {
     console.error(err);
@@ -1438,7 +1464,7 @@ async function loadDataFromCloud() {
   try {
     const res = await withTimeout(
       supabase.rpc('get_store_grid'),
-      20000,
+      40000,
       '拉取格子数据'
     );
     const { data, error } = res || { data: null, error: new Error('云端无响应') };
@@ -2357,7 +2383,7 @@ async function saveData() {
       supabase
         .from('cells')
         .upsert(cellPayload, { onConflict: 'store_id,cell_key' }),
-      15000,
+      30000,
       '保存格子数据'
     );
     if (cellErr) throw cellErr;
@@ -2370,7 +2396,7 @@ async function saveData() {
         .eq('store_id', currentStore.store_id)
         .eq('cell_key', selectedKey)
         .single(),
-      10000,
+      25000,
       '读取格子ID'
     );
     if (cellIdErr || !cellRow) throw new Error('无法获取格子ID：' + (cellIdErr ? friendlySupabaseErr(cellIdErr).user : '返回为空'));
@@ -2379,7 +2405,7 @@ async function saveData() {
     // 3. 纪念日同步策略：先删后插（简单可靠，避免复杂 diff）
     await withTimeout(
       supabase.from('memorials').delete().eq('cell_id', cellId),
-      10000,
+      25000,
       '清理旧纪念日'
     );
 
@@ -2392,7 +2418,7 @@ async function saveData() {
       }));
       const { error: mErr } = await withTimeout(
         supabase.from('memorials').insert(memorialPayload),
-        15000,
+        30000,
         '保存纪念日'
       );
       if (mErr) throw mErr;
@@ -2439,7 +2465,7 @@ async function deleteCurrent() {
         .delete()
         .eq('store_id', currentStore.store_id)
         .eq('cell_key', selectedKey),
-      12000,
+      25000,
       '删除格子数据'
     );
     if (error) throw error;
@@ -2617,7 +2643,7 @@ async function handleImport(e) {
         // JSON 模式：全量覆盖 → 先删除当前门店所有 cells（RLS 只允许删自己的）
         await withTimeout(
           supabase.from('cells').delete().eq('store_id', currentStore.store_id),
-          30000,
+          45000,
           '清空旧数据'
         );
       }
@@ -2649,7 +2675,7 @@ async function handleImport(e) {
           supabase
             .from('cells')
             .upsert(cellBatch, { onConflict: 'store_id,cell_key' }),
-          25000,
+          40000,
           `导入第 ${Math.floor(i/BATCH)+1} 批(${cellBatch.length}条)`
         );
         if (batchErr) throw batchErr;
