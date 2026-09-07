@@ -335,6 +335,18 @@
     50%     { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
   }
 
+  :root {
+    --period-7-bg: #a7f3d0;
+    --period-7-border: #10b981;
+    --period-7-text: #065f46;
+    --period-49-bg: #fed7aa;
+    --period-49-border: #ea580c;
+    --period-49-text: #7c2d12;
+    --period-1y-bg: #c7d2fe;
+    --period-1y-border: #6366f1;
+    --period-1y-text: #3730a3;
+  }
+
   .legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: #6b7280; }
   .legend-item { display: flex; align-items: center; gap: 5px; }
   .legend-dot { width: 14px; height: 14px; border-radius: 4px; border: 2px solid transparent; }
@@ -370,8 +382,16 @@
   .cell.large { aspect-ratio: 2 / 1; }
   .cell.empty { background: #e5e7eb; border: 2px dashed #d1d5db; color: #9ca3af; }
   .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; font-weight: 600; }
+
+  /* ====== 寄存期限配色：统一用 CSS 变量，可一键调整 ======
+     优先级规则：danger(当天红闪) > warning(临近黄闪) > period(期限底色) > occupied(通用绿)
+     对应 class 写在后面即可用相同 specificity 覆盖前面的 */
+  .cell.period-7   { background: var(--period-7-bg);  border-color: var(--period-7-border);  color: var(--period-7-text);  font-weight: 600; }
+  .cell.period-49  { background: var(--period-49-bg); border-color: var(--period-49-border); color: var(--period-49-text); font-weight: 600; }
+  .cell.period-1y  { background: var(--period-1y-bg); border-color: var(--period-1y-border); color: var(--period-1y-text); font-weight: 600; }
+
   .cell.warning { background: #fde68a; border-color: #eab308; color: #92400e; font-weight: 700; animation: pulse 2s infinite; }
-  .cell.danger { background: #fca5a5; border-color: #ef4444; color: #991b1b; font-weight: 700; animation: pulse 1.2s infinite; }
+  .cell.danger  { background: #fca5a5; border-color: #ef4444; color: #991b1b; font-weight: 700; animation: pulse 1.2s infinite; }
   .cell.selected { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.35); }
   .cell.filtered-out { opacity: 0.15; pointer-events: none; }
   .cell.saving::after {
@@ -737,7 +757,9 @@
 
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:2px dashed #d1d5db"></div>空闲</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#bbf7d0;border:2px solid #22c55e"></div>已寄存</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--period-7-bg);border:2px solid var(--period-7-border)"></div>七天</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--period-49-bg);border:2px solid var(--period-49-border)"></div>49天</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--period-1y-bg);border:2px solid var(--period-1y-border)"></div>一年</div>
       <div class="legend-item"><div class="legend-dot" style="background:#fde68a;border:2px solid #eab308"></div>临近(≤7天)</div>
       <div class="legend-item"><div class="legend-dot" style="background:#fca5a5;border:2px solid #ef4444"></div>当天</div>
     </div>
@@ -914,6 +936,17 @@
  * ========================================================== */
 const SUPABASE_URL = 'https://fvthtlisifqdzllssylq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_91Xiy2fnAzhJ3lUw5Ao8DQ_8JZ_-RBK';
+
+/* ==========================================================
+ *  寄存期限 → 视觉配色统一配置
+ *  如需调整颜色，直接改上方 :root 的 6 个 CSS 变量即可
+ *  规则：danger(当天红闪) > warning(临近黄闪) > period(期限色) > occupied(通用绿)
+ * ========================================================== */
+const STORAGE_PERIOD_CLASS_MAP = {
+  '七天': 'period-7',
+  '49天': 'period-49',
+  '一年': 'period-1y'
+};
 
 /* ==========================================================
  *  全局状态
@@ -2140,6 +2173,11 @@ function renderGrid() {
       cell.className = 'cell ' + size + ' ' + status;
       cell.dataset.key = key;
       if (key === selectedKey) cell.classList.add('selected');
+
+      // 寄存期限底色区分：普通已寄存(非警告/非当天)时叠加期限色，warning/danger 不动(优先级更高)
+      if (d && status === 'occupied' && d.storagePeriod && STORAGE_PERIOD_CLASS_MAP[d.storagePeriod]) {
+        cell.classList.add(STORAGE_PERIOD_CLASS_MAP[d.storagePeriod]);
+      }
 
       let matchesSearch = true;
       if (search && d) {
