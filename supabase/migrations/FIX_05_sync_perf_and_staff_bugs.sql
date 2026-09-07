@@ -43,9 +43,12 @@ begin
             c.pet_name,
             c.breed,
             c.owner_name,              -- 保留老字段向后兼容
-            c.owner_responsible,       -- ★ 新增 003 新列（之前漏掉了，同步后家长负责人会丢）
+            c.owner_responsible,       -- ★ 003 新列：家长负责人
+            c.farewell_date,           -- ★ 004 新列：告别日期
+            c.storage_period,          -- ★ 004 新列：寄存期限（七天 / 49天 / 一年）
             c.phone,
-            to_char(c.check_in, 'YYYY-MM-DD') as check_in,
+            to_char(c.check_in,    'YYYY-MM-DD') as check_in,
+            to_char(c.farewell_date,'YYYY-MM-DD') as farewell_date_str,
             c.notes,
             coalesce(ma.memorials, '[]'::jsonb) as memorials
         from public.cells c
@@ -65,14 +68,26 @@ revoke all on function public.get_store_grid() from public;
 grant execute on function public.get_store_grid() to anon, authenticated, service_role;
 
 comment on function public.get_store_grid() is
-'获取门店所有格子+纪念日（一次性返回）。v2 修复：员工/店长也能查到；补 owner_responsible 列；N+1→CTE 聚合提升性能。';
+'获取门店所有格子+纪念日（一次性返回）。v3 修复：员工/店长也能查到；补 owner_responsible/farewell_date/storage_period 列；N+1→CTE 聚合提升性能。';
 
 -- ---------- 2. 诊断：让用户一眼确认修复生效 ----------
-select '🔎  FIX_05 同步性能 + 员工权限 诊断（共 5 项）' as "项", '' as "说明"
+select '🔎  FIX_05 v3 同步性能 + 员工权限 + 告别日期/寄存期限 诊断（共 7 项）' as "项", '' as "说明"
 union all
 select 'get_store_grid 函数是否包含 owner_responsible' as 项,
   case when prosrc like '%owner_responsible%'
-    then '✅ 已包含（新家长负责人字段同步不会丢）' else '❌ 未包含，重新执行本 SQL' end
+    then '✅ 已包含（家长负责人同步不丢）' else '❌ 未包含，重新执行本 SQL' end
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname='public' and p.proname='get_store_grid'
+union all
+select 'get_store_grid 函数是否包含 farewell_date' as 项,
+  case when prosrc like '%farewell_date%'
+    then '✅ 已包含（告别日期同步不丢）' else '❌ 未包含，请先跑 004 再跑本 FIX_05' end
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname='public' and p.proname='get_store_grid'
+union all
+select 'get_store_grid 函数是否包含 storage_period' as 项,
+  case when prosrc like '%storage_period%'
+    then '✅ 已包含（寄存期限同步不丢）' else '❌ 未包含，请先跑 004 再跑本 FIX_05' end
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname='public' and p.proname='get_store_grid'
 union all

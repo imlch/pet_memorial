@@ -787,9 +787,24 @@
           </select>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>入住日期</label>
+          <input type="date" id="f_checkIn" onchange="onDateOrPeriodChange()">
+        </div>
+        <div class="form-group">
+          <label>告别日期</label>
+          <input type="date" id="f_farewellDate" onchange="onFarewellDateChange()">
+        </div>
+      </div>
       <div class="form-group">
-        <label>入住日期</label>
-        <input type="date" id="f_checkIn">
+        <label>寄存期限</label>
+        <select id="f_storagePeriod" onchange="onDateOrPeriodChange()">
+          <option value="">请选择</option>
+          <option value="七天">七天</option>
+          <option value="49天">49天</option>
+          <option value="一年">一年</option>
+        </select>
       </div>
       <div class="form-group">
         <label>纪念日</label>
@@ -800,6 +815,7 @@
           <select id="m_repeat">
             <option value="每年">每年</option>
             <option value="每月">每月</option>
+            <option value="每周">每周</option>
             <option value="仅一次">仅一次</option>
           </select>
           <button class="btn btn-success" onclick="addMemorial()">+ 添加</button>
@@ -1461,6 +1477,8 @@ async function loadDataFromCloud() {
         breed: c.breed || '',
         owner_responsible: c.owner_responsible || c.owner_name || '',  // 兼容老列 + 新列
         checkIn: c.check_in || '',
+        farewellDate: c.farewell_date_str || c.farewell_date || '',   // 兼容 FIX_05 v3 返回的 farewell_date_str 或原生 farewell_date
+        storagePeriod: c.storage_period || '',
         notes: c.notes || '',
         memorials: (Array.isArray(c.memorials) ? c.memorials : []).map(m => ({
           id: m && m.id ? m.id : null,
@@ -1528,18 +1546,120 @@ function getCellStatus(key) {
 function getNextDate(dateStr, repeat) {
   const parts = (dateStr || '').split('-');
   if (parts.length < 3) return new Date(NaN);
-  const y = parseInt(parts[0]), m = parseInt(parts[1]), d = parseInt(parts[2]);
+  const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+  const orig = new Date(y, m - 1, d);                 // 原始纪念日（月内日期 / 星期几都基于它算）
+  if (isNaN(orig.getTime())) return new Date(NaN);
   const now = today();
-  if (repeat === '仅一次') return new Date(y, m-1, d);
-  if (repeat === '每月') {
-    let next = new Date(now.getFullYear(), now.getMonth(), d);
-    if (next < now) next = new Date(now.getFullYear(), now.getMonth()+1, d);
+
+  if (repeat === '仅一次') return orig;
+
+  if (repeat === '每周') {
+    const weekday = orig.getDay();                     // 0=周日 1=周一 ... 6=周六
+    // 先取「本周的 weekday」：从今天出发，往后找到第一个 weekday
+    const diff = (weekday - now.getDay() + 7) % 7;     // 本周/下周的第一个对应星期几（相对于今天）
+    let next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+    // 如果「本周的这一天」与「原始纪念日」完全相同且刚好是今天，直接返回今天
+    const origIsToday = orig.getFullYear() === now.getFullYear() && orig.getMonth() === now.getMonth() && orig.getDate() === now.getDate();
+    if (!origIsToday && diff === 0 && next.getTime() === orig.getTime() - orig.getTimezoneOffset()*60*1000*0) {
+      // 跳过（理论上不会触发）
+    }
+    // 若计算出的 next 在今天之前（不可能，因为 diff 取了 +7 模），保险再加 7 天
+    if (dateOnlyCompare(next, now) < 0) next = addDays(next, 7);
     return next;
   }
-  let next = new Date(now.getFullYear(), m-1, d);
-  if (next < now) next = new Date(now.getFullYear()+1, m-1, d);
+
+  if (repeat === '每月') {
+    let next = new Date(now.getFullYear(), now.getMonth(), d);
+    if (dateOnlyCompare(next, now) < 0) next = new Date(now.getFullYear(), now.getMonth() + 1, d);
+    // 超出当月最大日（如 31 日的小月）自动滚到月末
+    if (next.getDate() !== d) next = new Date(next.getFullYear(), next.getMonth() + 1, 0);
+    return next;
+  }
+
+  // 默认：每年
+  let next = new Date(now.getFullYear(), m - 1, d);
+  // 2 月 29 日闰年兼容
+  if (next.getDate() !== d) next = new Date(now.getFullYear(), m - 1, 28);
+  if (dateOnlyCompare(next, now) < 0) {
+    next = new Date(now.getFullYear() + 1, m - 1, d);
+    if (next.getDate() !== d) next = new Date(now.getFullYear() + 1, m - 1, 28);
+  }
   return next;
 }
+function dateOnlyCompare(a, b) {
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+  if (da < db) return -1;
+  if (da > db) return 1;
+  return 0;
+}
+function addDays(dateOrStr, n) {
+  const d = (dateOrStr instanceof Date) ? new Date(dateOrStr.getTime()) : parseISODate(dateOrStr);
+  if (!d || isNaN(d.getTime())) return new Date(NaN);
+  d.setDate(d.getDate() + (Number(n) || 0));
+  return d;
+}
+function parseISODate(s) {
+  const p = (s || '').split('-');
+  if (p.length < 3) return new Date(NaN);
+  const d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  return isNaN(d.getTime()) ? new Date(NaN) : d;
+}
+function toISODate(date) {
+  if (!date || isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+function periodToDays(period) {
+  switch ((period || '').trim()) {
+    case '七天': return 7;
+    case '49天': return 49;
+    case '一年': return 365;     // 按整 365 天算（2/29 的闰年情况让 addDays 自动处理）
+    default:     return null;
+  }
+}
+
+/** 自动生成系列纪念日：按「入住日期 + 寄存期限」计算「寄存到期」提醒，写入 tempMemorials（去重避免重复插）*/
+function onDateOrPeriodChange() {
+  const checkIn = (document.getElementById('f_checkIn') || {}).value || '';
+  const period  = (document.getElementById('f_storagePeriod') || {}).value || '';
+  if (!checkIn || !period) return;
+  const n = periodToDays(period);
+  if (!n) return;
+  const expiry = toISODate(addDays(checkIn, n));
+  if (!expiry) return;
+
+  // 先删掉之前自动生成的「寄存到期」旧条目（避免改期限后有两条）
+  tempMemorials = (tempMemorials || []).filter(m => !(m && typeof m.label === 'string' && /^寄存到期/.test(m.label)));
+  const label = '寄存到期（' + period + '）';
+  tempMemorials.push({ label: label, date: expiry, repeat: '仅一次' });
+  renderMemorialList();
+  showToast('已自动生成到期提醒：' + label + ' · ' + expiry, 'success');
+}
+
+/** 自动生成头七到七七共 7 条纪念日（仅一次，49 天自动停止）*/
+function onFarewellDateChange() {
+  const farewell = (document.getElementById('f_farewellDate') || {}).value || '';
+  if (!farewell) return;
+
+  // 先删掉之前自动生成的「头七/二七/三七/四七/五七/六七/七七」旧条目
+  const AUTO_LABELS = { '头七': 1, '二七': 2, '三七': 3, '四七': 4, '五七': 5, '六七': 6, '七七': 7 };
+  tempMemorials = (tempMemorials || []).filter(m => !(m && typeof m.label === 'string' && AUTO_LABELS.hasOwnProperty(m.label)));
+
+  const labelKeys = Object.keys(AUTO_LABELS);
+  for (let i = 0; i < labelKeys.length; i++) {
+    const name = labelKeys[i];
+    const weekNo = AUTO_LABELS[name];
+    const date = toISODate(addDays(farewell, weekNo * 7));
+    if (!date) continue;
+    tempMemorials.push({ label: name, date: date, repeat: '仅一次' });
+  }
+  renderMemorialList();
+  showToast('已自动生成：头七 / 二七 / 三七 / 四七 / 五七 / 六七 / 七七（共 7 条·仅一次·到 49 天止）', 'success');
+}
+
 function daysUntil(date) {
   if (!date || isNaN(date.getTime())) return 9999;
   return Math.ceil((date - today()) / 86400000);
@@ -2131,6 +2251,8 @@ function renderDetail() {
         '<div class="detail-section-title">基本信息</div>' +
         '<div class="detail-row"><label>家长负责人</label><span>' + (d.owner_responsible || '-') + '</span></div>' +
         '<div class="detail-row"><label>入住日期</label><span>' + (d.checkIn || '-') + '</span></div>' +
+        (d.farewellDate ? ('<div class="detail-row"><label>告别日期</label><span>' + d.farewellDate + '</span></div>') : '') +
+        (d.storagePeriod ? ('<div class="detail-row"><label>寄存期限</label><span>' + d.storagePeriod + '</span></div>') : '') +
       '</div>' +
       '<div class="detail-section">' +
         '<div class="detail-section-title">纪念日管理</div>' + memorialsHtml +
@@ -2156,6 +2278,8 @@ function openModal() {
   document.getElementById('f_breed').value = d ? d.breed || '' : '';
   document.getElementById('f_ownerResponsible').value = d ? d.owner_responsible || '' : '';
   document.getElementById('f_checkIn').value = d ? d.checkIn || '' : '';
+  document.getElementById('f_farewellDate').value = d ? d.farewellDate || '' : '';
+  document.getElementById('f_storagePeriod').value = d ? d.storagePeriod || '' : '';
   document.getElementById('f_notes').value = d ? d.notes || '' : '';
   tempMemorials = d && d.memorials ? JSON.parse(JSON.stringify(d.memorials)) : [];
   renderMemorialList();
@@ -2224,6 +2348,8 @@ async function saveData() {
       breed: document.getElementById('f_breed').value.trim(),
       owner_responsible: document.getElementById('f_ownerResponsible').value.trim(),
       check_in: document.getElementById('f_checkIn').value || null,
+      farewell_date: document.getElementById('f_farewellDate').value || null,
+      storage_period: document.getElementById('f_storagePeriod').value || null,
       notes: document.getElementById('f_notes').value.trim()
     };
 
@@ -2277,7 +2403,9 @@ async function saveData() {
       petName: cellPayload.pet_name,
       breed: cellPayload.breed,
       owner_responsible: cellPayload.owner_responsible,
-      checkIn: cellPayload.check_in,
+      checkIn: cellPayload.check_in || '',
+      farewellDate: cellPayload.farewell_date || '',
+      storagePeriod: cellPayload.storage_period || '',
       notes: cellPayload.notes,
       memorials: tempMemorials.map(m => ({ id: null, label: m.label, date: m.date, repeat: m.repeat }))
     };
@@ -2334,7 +2462,7 @@ async function deleteCurrent() {
  *  导出 / 导入
  * ========================================================== */
 function exportData() {
-  const rows = [['格子编号','行','列','格子大小','宠物名','品种','家长负责人','入住日期','备注']];
+  const rows = [['格子编号','行','列','格子大小','宠物名','品种','家长负责人','入住日期','告别日期','寄存期限','备注']];
   for (let r = 1; r <= ROWS; r++) {
     for (let c = 1; c <= COLS; c++) {
       const key = 'r' + r + 'c' + c;
@@ -2342,7 +2470,9 @@ function exportData() {
       if (d) {
         rows.push([
           key, r, c, getColSize(c) === 'large' ? '大' : '小',
-          d.petName || '', d.breed || '', d.owner_responsible || '', d.checkIn || '', d.notes || ''
+          d.petName || '', d.breed || '', d.owner_responsible || '',
+          d.checkIn || '', d.farewellDate || '', d.storagePeriod || '',
+          d.notes || ''
         ]);
       }
     }
@@ -2367,40 +2497,70 @@ function parseCSV(text) {
   text = text.replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return null;
-  // 判断新旧格式表头：老格式 10 列（有家长+联系方式），新格式 9 列（仅家长负责人）
+  // 判断三版表头：
+  //   OLDEST_FORMAT_COLS = 10  旧版（家长+联系方式）列索引: 6=家长 7=联系方式 8=入住日期 9=备注
+  //   MID_FORMAT_COLS    =  9  中版（家长负责人）        列索引: 6=家长负责人 7=入住日期 8=备注
+  //   NEWEST_FORMAT_COLS = 11  新版（告别日期+寄存期限） 列索引: 6=家长负责人 7=入住日期 8=告别日期 9=寄存期限 10=备注
   const headerLine = lines[0] || '';
   const headerRow  = parseCSVLine(headerLine);
-  const OLD_FORMAT_COLS = 10;  // 老表头第6列=家长, 第7列=联系方式, 第8列=入住日期, 第9列=备注
-  const NEW_FORMAT_COLS = 9;   // 新表头第6列=家长负责人, 第7列=入住日期, 第8列=备注
-  const isOld = headerRow && headerRow.length >= OLD_FORMAT_COLS &&
-                (headerRow[6] || '').includes('家长') &&
-                (headerRow[7] || '').includes('联系方式');
-  const minCols = isOld ? OLD_FORMAT_COLS : NEW_FORMAT_COLS;
-  const col_owner     = 6;
-  const col_phone     = 7;     // 老格式才有
-  const col_checkIn   = isOld ? 8 : 7;
-  const col_notes     = isOld ? 9 : 8;
+  const OLDEST_FORMAT_COLS = 10;
+  const MID_FORMAT_COLS    = 9;
+  const NEWEST_FORMAT_COLS = 11;
+
+  const hasFarewell   = headerRow && headerRow.length >= NEWEST_FORMAT_COLS &&
+                        (headerRow[8] || '').includes('告别') && (headerRow[9] || '').includes('期限');
+  const isOldest      = !hasFarewell && headerRow && headerRow.length >= OLDEST_FORMAT_COLS &&
+                        (headerRow[6] || '').includes('家长') &&
+                        (headerRow[7] || '').includes('联系方式');
+
+  let col_owner, col_phone, col_checkIn, col_farewell, col_storage, col_notes;
+  if (hasFarewell) {
+    // 新版 11 列
+    col_owner    = 6;
+    col_checkIn  = 7;
+    col_farewell = 8;
+    col_storage  = 9;
+    col_notes    = 10;
+  } else if (isOldest) {
+    // 旧版 10 列
+    col_owner    = 6;
+    col_phone    = 7;
+    col_checkIn  = 8;
+    col_farewell = -1;
+    col_storage  = -1;
+    col_notes    = 9;
+  } else {
+    // 中版 9 列
+    col_owner    = 6;
+    col_checkIn  = 7;
+    col_farewell = -1;
+    col_storage  = -1;
+    col_notes    = 8;
+  }
   const result = {};
   for (let i = 1; i < lines.length; i++) {
     const row = parseCSVLine(lines[i]);
-    if (!row || row.length < minCols) continue;
-    const key = row[0].trim();
-    const r = parseInt(row[1]), c = parseInt(row[2]);
+    const minLen = hasFarewell ? NEWEST_FORMAT_COLS : (isOldest ? OLDEST_FORMAT_COLS : MID_FORMAT_COLS);
+    if (!row || row.length < minLen - 2) continue;                 // -2：允许少一两个尾部空列
+    const key = (row[0] || '').trim();
+    const r = parseInt(row[1], 10), c = parseInt(row[2], 10);
     if (isNaN(r) || isNaN(c) || r < 1 || r > 999 || c < 1 || c > 999) continue;
-    const petName = row[4].trim();
+    const petName = (row[4] || '').trim();
     if (!petName) continue;
-    // 老格式：owner+phone 合并 → owner_responsible 优先用 owner，空的话用 phone
-    const ownerResponsible = isOld
-      ? ((row[col_owner] || '').trim() || (row[col_phone] || '').trim())
-      : (row[col_owner] || '').trim();
+    // 旧版 owner+phone 合并 → owner_responsible 优先用 owner，空的话用 phone
+    const ownerResponsible = isOldest
+      ? (((row[col_owner] || '').trim() || (row[col_phone] || '').trim()))
+      : ((row[col_owner] || '').trim());
     result[key] = {
       row_num: r,
       col_num: c,
       petName: petName,
-      breed: row[5].trim(),
+      breed: (row[5] || '').trim(),
       owner_responsible: ownerResponsible,
-      checkIn: (row[col_checkIn] || '').trim(),
-      notes:   (row[col_notes]   || '').trim(),
+      checkIn:          col_checkIn  >= 0 ? (row[col_checkIn]  || '').trim() : '',
+      farewellDate:     col_farewell >= 0 ? (row[col_farewell] || '').trim() : '',
+      storagePeriod:    col_storage  >= 0 ? (row[col_storage]  || '').trim() : '',
+      notes:            col_notes    >= 0 ? (row[col_notes]    || '').trim() : '',
       memorials: []
     };
   }
@@ -2479,6 +2639,8 @@ async function handleImport(e) {
             breed: d.breed || '',
             owner_responsible: d.owner_responsible || d.owner || '',  // 兼容 JSON 旧字段
             check_in: d.checkIn || null,
+            farewell_date: (d.farewellDate || d.farewell_date || '') || null,
+            storage_period: (d.storagePeriod || d.storage_period || '') || null,
             notes: d.notes || ''
           };
         }).filter(c => c.row_num > 0 && c.col_num > 0);
