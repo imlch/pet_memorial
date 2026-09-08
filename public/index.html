@@ -822,8 +822,7 @@
       <div class="form-group">
         <label>寄存期限</label>
         <select id="f_storagePeriod" onchange="onDateOrPeriodChange()">
-          <option value="">请选择</option>
-          <option value="七天">七天</option>
+          <option value="七天" selected>七天</option>
           <option value="49天">49天</option>
           <option value="一年">一年</option>
         </select>
@@ -2343,7 +2342,8 @@ function openModal() {
   document.getElementById('f_ownerResponsible').value = d ? d.owner_responsible || '' : '';
   document.getElementById('f_checkIn').value = d ? d.checkIn || '' : '';
   document.getElementById('f_farewellDate').value = d ? d.farewellDate || '' : '';
-  document.getElementById('f_storagePeriod').value = d ? d.storagePeriod || '' : '';
+  document.getElementById('f_storagePeriod').value =
+    d ? (d.storagePeriod || '七天') : '七天';
   document.getElementById('f_notes').value = d ? d.notes || '' : '';
   tempMemorials = d && d.memorials ? JSON.parse(JSON.stringify(d.memorials)) : [];
   renderMemorialList();
