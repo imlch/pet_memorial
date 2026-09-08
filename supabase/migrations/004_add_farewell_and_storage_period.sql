@@ -12,7 +12,7 @@ alter table public.cells
 alter table public.cells
     add column if not exists storage_period text;
 
-comment on column public.cells.farewell_date is '告别日期（即死亡日期）。填写后会自动生成头七~七七共 7 条纪念日，到 49 天为止';
+comment on column public.cells.farewell_date is '告别日期（即死亡日期）。民俗规则：去世当天算第1天，头七=告别日+6天（间隔6天含去世当天），七七=告别日+48天（49天周期内）；自动生成头七~七七共7条仅一次纪念日';
 comment on column public.cells.storage_period  is '寄存期限：七天 / 49天 / 一年。选定后按入住日期自动算到期日生成「寄存到期」提醒';
 
 -- 2. 索引：按告别日期、寄存期限过滤

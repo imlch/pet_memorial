@@ -1697,25 +1697,34 @@ function onDateOrPeriodChange() {
   showToast('已自动生成到期提醒：' + label + ' · ' + expiry, 'success');
 }
 
-/** 自动生成头七到七七共 7 条纪念日（仅一次，49 天自动停止）*/
+/** 自动生成头七到七七共 7 条纪念日（仅一次）
+ *  民俗规则：去世当天（告别日）算「第 1 天」，因此：
+ *    头七 = 告别日 + 6 天  （与告别日精确相隔 6 天，含去世当天共 7 天）
+ *    二七 = 告别日 + 13 天
+ *    三七 = 告别日 + 20 天
+ *    四七 = 告别日 + 27 天
+ *    五七 = 告别日 + 34 天
+ *    六七 = 告别日 + 41 天
+ *    七七 = 告别日 + 48 天  （整体 49 天周期内）
+ *  递推公式：第 N 七(N=1..7) = 告别日 + (7*N - 1) 天；相邻两个「七」之间依然相差 7 天。
+ */
 function onFarewellDateChange() {
   const farewell = (document.getElementById('f_farewellDate') || {}).value || '';
   if (!farewell) return;
 
-  // 先删掉之前自动生成的「头七/二七/三七/四七/五七/六七/七七」旧条目
   const AUTO_LABELS = { '头七': 1, '二七': 2, '三七': 3, '四七': 4, '五七': 5, '六七': 6, '七七': 7 };
   tempMemorials = (tempMemorials || []).filter(m => !(m && typeof m.label === 'string' && AUTO_LABELS.hasOwnProperty(m.label)));
 
   const labelKeys = Object.keys(AUTO_LABELS);
   for (let i = 0; i < labelKeys.length; i++) {
     const name = labelKeys[i];
-    const weekNo = AUTO_LABELS[name];
-    const date = toISODate(addDays(farewell, weekNo * 7));
+    const n7 = AUTO_LABELS[name];
+    const date = toISODate(addDays(farewell, 7 * n7 - 1));
     if (!date) continue;
     tempMemorials.push({ label: name, date: date, repeat: '仅一次' });
   }
   renderMemorialList();
-  showToast('已自动生成：头七 / 二七 / 三七 / 四七 / 五七 / 六七 / 七七（共 7 条·仅一次·到 49 天止）', 'success');
+  showToast('已自动生成：头七~七七共 7 条（头七距告别日 6 天，含去世当天；递推 7×N−1 天，到 49 天周期内截止）', 'success');
 }
 
 function daysUntil(date) {
