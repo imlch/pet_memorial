@@ -353,33 +353,164 @@
 
   .main { display: flex; flex: 1; overflow: hidden; }
   .grid-area {
-    flex: 1; overflow: auto; padding: 16px; background: #f9fafb; cursor: grab;
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    background: #f9fafb;
+    cursor: grab;
+    -webkit-overflow-scrolling: touch;
   }
   .grid-area:active { cursor: grabbing; }
   .grid-wrapper {
+    display: -ms-grid;
     display: grid;
+    -ms-grid-columns: 36px (1fr)[15];
     grid-template-columns: 36px repeat(15, 1fr);
-    gap: 4px;
+    -webkit-column-gap: 4px;
+    -moz-column-gap: 4px;
+    column-gap: 4px;
+    row-gap: 4px;
     min-width: 600px;
     transform-origin: 0 0;
+    -webkit-transform-origin: 0 0;
     transition: transform 0.15s ease;
+    -webkit-transition: -webkit-transform 0.15s ease;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
   .col-header {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; color: #9ca3af; font-weight: 700; padding-bottom: 4px;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 700;
+    padding-bottom: 4px;
+    min-height: 20px;
+    line-height: 1;
   }
   .row-label {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; color: #9ca3af; font-weight: 700;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 700;
+    min-height: 32px;
+    line-height: 1;
   }
   .cell {
-    border-radius: 6px; cursor: pointer; transition: all 0.15s ease;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; position: relative; border: 2px solid transparent; user-select: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    -webkit-transition: all 0.15s ease;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    font-size: 10px;
+    position: relative;
+    border: 2px solid transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    text-align: center;
+    word-break: break-all;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.15;
+    -webkit-line-clamp: 2;
+    padding: 2px 4px;
+    min-height: 32px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
   }
-  .cell:hover { transform: scale(1.08); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .cell.small { aspect-ratio: 1; }
-  .cell.large { aspect-ratio: 2 / 1; }
+  .cell:hover {
+    -webkit-transform: scale(1.08);
+    transform: scale(1.08);
+    z-index: 10;
+    -webkit-box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .cell.small {
+    aspect-ratio: 1 / 1;
+    -webkit-aspect-ratio: 1 / 1;
+    min-height: 48px;
+    width: 100%;
+  }
+  .cell.large {
+    aspect-ratio: 2 / 1;
+    -webkit-aspect-ratio: 2 / 1;
+    min-height: 48px;
+    width: 100%;
+  }
+
+  /* ============ Safari / iOS 针对性修复（命中 html.safari 才生效）============ */
+  html.safari .grid-wrapper {
+    /* Safari Grid row auto 高度计算 bug：显式 grid-auto-rows 防止行塌陷导致格子高度为 0 */
+    grid-auto-rows: minmax(48px, auto);
+    -ms-grid-rows: minmax(48px, auto);
+  }
+  html.safari .cell {
+    /* Safari 对 flex 的 align-items:center 时中文会偏上，强制用 -webkit-box 居中 */
+    display: -webkit-box !important;
+    display: -ms-flexbox !important;
+    display: flex !important;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    line-height: 1.2;
+  }
+  html.safari .cell small,
+  html.safari .cell span,
+  html.safari .cell [data-text] {
+    -webkit-box-flex: 0;
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+    display: block;
+    text-align: center;
+    width: 100%;
+    word-break: break-all;
+  }
+  html.safari .grid-area { -webkit-overflow-scrolling: touch; }
+  html.safari .form-group select,
+  html.ios .form-group select { padding-top: 8px; padding-bottom: 8px; min-height: 40px; }
+  html.safari .form-group input[type="date"],
+  html.ios .form-group input[type="date"] {
+    /* iOS/Safari date picker 原生高度偏小，强制加 line-height/color 防止被压成一条线 */
+    line-height: 1.5;
+    -webkit-text-fill-color: #111827;
+    color: #111827;
+    background-color: #ffffff !important;
+    background-clip: padding-box;
+  }
+  html.safari .auth-tab,
+  html.ios .auth-tab { min-height: 34px; line-height: 1.1; }
+  html.safari .legend,
+  html.ios .legend { flex-wrap: wrap; row-gap: 6px; }
   .cell.empty { background: #e5e7eb; border: 2px dashed #d1d5db; color: #9ca3af; }
   .cell.occupied { background: #bbf7d0; border-color: #22c55e; color: #166534; font-weight: 600; }
 
@@ -476,12 +607,44 @@
   .form-group { margin-bottom: 16px; }
   .form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; letter-spacing: 0.2px; }
   .form-group input, .form-group textarea, .form-group select {
-    width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
-    font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    line-height: 1.4;
+    min-height: 40px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-transition: border-color 0.2s, -webkit-box-shadow 0.2s;
     background: #fff;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
   }
-  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
-  .form-group input:disabled { background: #f9fafb; color: #9ca3af; cursor: not-allowed; }
+  .form-group input[type="date"],
+  .form-group input[type="datetime-local"] {
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    min-height: 40px;
+    color: #111827;
+    background-color: #ffffff;
+  }
+  .form-group select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px 16px;
+    padding-right: 34px;
+    cursor: pointer;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); -webkit-box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+  .form-group input:disabled { background: #f9fafb; color: #9ca3af; cursor: not-allowed; -webkit-text-fill-color: #9ca3af; opacity: 1; }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: flex; gap: 16px; flex-wrap: wrap; }
   .form-row .form-group { flex: 1; }
@@ -1149,6 +1312,25 @@ function getColSize(c) {
  *  启动流程
  * ========================================================== */
 window.addEventListener('DOMContentLoaded', async () => {
+  /* ============================================================
+   *  浏览器能力区分（Safari / iOS / 移动端 针对性修复）
+   *  说明：Safari 存在三大特有 bug，必须根 class 命中后才应用：
+   *    1) CSS Grid row auto 高度计算与 Chromium 不一致（行塌陷）
+   *    2) input[type=date] 原生控件极窄、不接受 padding/圆角
+   *    3) new Date('YYYY-MM-DD') 以 UTC 00:00 解析 → 东八区显示前一天（daysUntil 差 1）
+   * ============================================================ */
+  (function applyBrowserFlags() {
+    var ua = (navigator && navigator.userAgent || '').toString();
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var isSafari = /^((?!chrome|android|crios|edg|edga).)*safari/i.test(ua);
+    var isMacSafari = /Macintosh.*AppleWebKit/i.test(ua) && !/Chrome|Chromium|Edg|OPR|Brave/i.test(ua);
+    var htmlEl = document.documentElement;
+    if (isIOS) htmlEl.classList.add('ios', 'mobile-browser', 'safari');
+    if (isSafari || isMacSafari) htmlEl.classList.add('safari');
+    if (/Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) htmlEl.classList.add('mobile-browser');
+    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) htmlEl.classList.add('touch-device');
+  })();
+
   setLoading('正在连接云端服务...');
 
   // 1. 初始化 Supabase 客户端
@@ -1658,17 +1840,38 @@ function addDays(dateOrStr, n) {
   return d;
 }
 function parseISODate(s) {
-  const p = (s || '').split('-');
-  if (p.length < 3) return new Date(NaN);
-  const d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
-  return isNaN(d.getTime()) ? new Date(NaN) : d;
+  var str = (s || '').replace(/\s+/g, '');
+  if (!str) return new Date(NaN);
+  var m = str.match(/^(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?$/);
+  if (!m) {
+    var d1 = new Date(str);
+    if (!isNaN(d1.getTime())) {
+      d1.setHours(0, 0, 0, 0);
+      return d1;
+    }
+    return new Date(NaN);
+  }
+  var y = parseInt(m[1], 10);
+  var mo = parseInt(m[2], 10) - 1;
+  var da = parseInt(m[3], 10);
+  /*  Safari / iOS Safari 对 new Date('YYYY-MM-DD') 会按 UTC 解析，
+      在中国(东八区)则 00:00 UTC 前一天 08:00，导致 daysUntil 差 1 天。
+      这里强制用本地时区 (y, mo, da) 构造彻底规避。 */
+  var out = new Date(y, mo, da, 0, 0, 0, 0);
+  return isNaN(out.getTime()) ? new Date(NaN) : out;
 }
 function toISODate(date) {
   if (!date || isNaN(date.getTime())) return '';
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  var y = date.getFullYear();
+  var m = String(date.getMonth() + 1).padStart(2, '0');
+  var d = String(date.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + d;
+}
+function dateOnlyCompare(a, b) {
+  if (!a || !b || isNaN(a.getTime()) || isNaN(b.getTime())) return NaN;
+  var d1 = new Date(a.getFullYear(), a.getMonth(), a.getDate(), 0, 0, 0, 0);
+  var d2 = new Date(b.getFullYear(), b.getMonth(), b.getDate(), 0, 0, 0, 0);
+  return (d1.getTime() - d2.getTime()) / 86400000;
 }
 function periodToDays(period) {
   switch ((period || '').trim()) {
